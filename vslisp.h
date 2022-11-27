@@ -82,7 +82,12 @@ struct lisp_sym {
 
 struct lisp_sexp {
   struct lisp_sym sym;
-  struct sexp* next;
+  struct sexp* left,
+             * right;
+  bool   is_sym; /**
+                    0 -> entry is a symbol, use the hash table
+                    1 -> entry is a node, set append state
+                 */
 };
 
 #endif
