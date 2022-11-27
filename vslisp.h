@@ -10,6 +10,7 @@
 #  endif
 
 #  define IOBLOCK (4096)
+#  define SEXPPOOL (1024)
 
 #  define __LISP_WHITESPACE \
          0x00: \
@@ -22,7 +23,22 @@
 
 #  define BIT(x) (1 << (x))
 
+#  define __LISP_ALLOWED_IN_NAME(x) \
+  (((x) > 0x20) || (x) != 0x7f)
+
+#  define MEMPOOL_TMPL(t) __mempool_##t
+
+#  define MEMPOOL(t,am)            \
+  MEMPOOL_TMPL(t) {                \
+    struct t mem[am];              \
+    struct MEMPOOL_TMPL(t) * next; \
+    uint used;                     \
+    uint free;                     \
+    uint total;                    \
+  }
+
 typedef unsigned int uint;
+typedef unsigned long ulong;
 typedef unsigned char bool;
 
 enum lisp_c {
@@ -57,7 +73,16 @@ struct __hash_internal {
 struct hash {
   struct __hash_internal internal;
   uint len;
-  long hash;
+  ulong hash;
+};
+
+struct lisp_sym {
+  struct hash hash;
+};
+
+struct lisp_sexp {
+  struct lisp_sym sym;
+  struct sexp* next;
 };
 
 #endif
