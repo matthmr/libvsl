@@ -15,7 +15,7 @@
 
 
 #  define IOBLOCK (4096)
-#  define SEXPPOOL (256)
+#  define SEXPPOOL (64)
 
 #  define __LISP_WHITESPACE \
          0x00: \
@@ -27,6 +27,8 @@
     case 0x0d
 
 #  define BIT(x) (1 << (x))
+#  define MSG(x) \
+  x, ((sizeof(x)/sizeof(char)) - 1)
 
 #  define __LISP_ALLOWED_IN_NAME(x) \
   (((x) > 0x20) || (x) != 0x7f)
@@ -37,6 +39,7 @@
   MEMPOOL_TMPL(t) {                \
     struct t mem[am];              \
     struct MEMPOOL_TMPL(t) * next; \
+    struct MEMPOOL_TMPL(t) * prev; \
     uint used;                     \
     uint total;                    \
   }
@@ -70,7 +73,7 @@ enum lisp_pstat {
 };
 
 struct __lisp_cps_master {
-  enum lisp_pev ev;
+  enum lisp_pev   ev;
   enum lisp_pstat stat;
 };
 
@@ -94,29 +97,24 @@ struct lisp_sym {
   bool        nil;
 };
 
-struct root_off_t {
-  uint am;
-  bool local; /**
-                0 -> on another pool;
-                   offsets become relative
-                   to that pool's root
-                1 -> in the same pool
-              */
-};
-
-struct child_off_t {
-  struct root_off_t t;
+struct off_t {
   struct lisp_sym sym;
-  bool sexp;   /**
-                 0 -> has sexp
-                 1 -> has sym
-                 2 -> has neither
-              */
+  uint am;
+  bool new; /**
+               0 -> on another pool;
+               offsets become relative
+               to that pool's root
+               1 -> in the same pool
+            */
+  bool sexp; /**
+                0 -> has sexp
+                1 -> has sym
+                2 -> has neither
+             */
 };
 
 struct lisp_sexp {
-  struct root_off_t  root;
-  struct child_off_t left, right;
+  struct off_t  root, left, right;
 };
 
 #endif
