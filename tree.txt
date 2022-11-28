@@ -1,0 +1,12 @@
+((foo (bar biz) (foo)) (bar) biz)
+
+
+              .
+             / \
+            .   .-------------------.
+           / \                     / \
+        foo   .                   .   biz
+             / \                 / \
+            .   .------.      bar   nil
+           / \        / \
+        bar   biz  foo   nil
