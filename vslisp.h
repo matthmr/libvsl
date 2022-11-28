@@ -1,16 +1,21 @@
 #ifndef LOCK_VSLISP
 #  define LOCK_VSLISP
 
-#  ifndef true
-#    define true  0x1
-#  endif
-
 #  ifndef false
 #    define false 0x0
 #  endif
 
+#  ifndef true
+#    define true  0x1
+#  endif
+
+#  ifndef neither
+#    define neither 0x2
+#  endif
+
+
 #  define IOBLOCK (4096)
-#  define SEXPPOOL (1024)
+#  define SEXPPOOL (256)
 
 #  define __LISP_WHITESPACE \
          0x00: \
@@ -33,13 +38,21 @@
     struct t mem[am];              \
     struct MEMPOOL_TMPL(t) * next; \
     uint used;                     \
-    uint free;                     \
     uint total;                    \
   }
 
 typedef unsigned int uint;
 typedef unsigned long ulong;
 typedef unsigned char bool;
+
+struct pool_ret_t {
+  void* mem;
+  //int slave;
+  bool  new; /**
+                0 -> in the same pool
+                1 -> on a different pool
+              */
+};
 
 enum lisp_c {
   __LISP_PAREN_OPEN = '(',
@@ -78,16 +91,32 @@ struct hash {
 
 struct lisp_sym {
   struct hash hash;
+  bool        nil;
+};
+
+struct root_off_t {
+  uint am;
+  bool local; /**
+                0 -> on another pool;
+                   offsets become relative
+                   to that pool's root
+                1 -> in the same pool
+              */
+};
+
+struct child_off_t {
+  struct root_off_t t;
+  struct lisp_sym sym;
+  bool sexp;   /**
+                 0 -> has sexp
+                 1 -> has sym
+                 2 -> has neither
+              */
 };
 
 struct lisp_sexp {
-  struct lisp_sym sym;
-  struct sexp* left,
-             * right;
-  bool   is_sym; /**
-                    0 -> entry is a symbol, use the hash table
-                    1 -> entry is a node, set append state
-                 */
+  struct root_off_t  root;
+  struct child_off_t left, right;
 };
 
 #endif

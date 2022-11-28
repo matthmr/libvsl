@@ -15,24 +15,88 @@ static char iobuf[IOBLOCK] = {0};
 
 static struct hash chash = {0};
 static struct lisp_cps lcps = {0};
-static struct lisp_sexp  root = {0},
-                       * head = NULL;
+static struct lisp_sexp* head = NULL,
+                       * root = NULL;
 
 struct MEMPOOL(lisp_sexp, SEXPPOOL);
 //struct MEMPOOL(lisp_sym_hash, HASHPOOL);
 
 static struct MEMPOOL_TMPL(lisp_sexp) sexpmp = {0};
+static struct MEMPOOL_TMPL(lisp_sexp)* sexpmpp = {0};
 //static struct MEMPOOL_TMPL(lisp_sym_hash) hashmp = {0};
 
-static inline void lisp_sexp_node(void) { }
+static inline struct pool_ret_t pool_add_node(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
+  // TODO: make this an `int' funcion because of
+  //       ENOMEM in malloc
+  struct pool_ret_t ret = {
+    .mem = NULL,
+    .new = 0,
+  };
+
+  if (mpp->used == mpp->total) {
+    mpp->next = malloc(mpp->total * sizeof(struct MEMPOOL_TMPL(lisp_sexp)));
+
+    mpp->next->total = mpp->total;
+    mpp->next->used  = 0;
+    mpp->next->next  = NULL;
+
+    mpp = mpp->next;
+    ret.new = true;
+  }
+
+  ret.mem = mpp->mem + mpp->used;
+  ++mpp->used;
+
+  return ret;
+}
+static inline void lisp_sexp_node(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
+  struct pool_ret_t pr    = pool_add_node(mpp);
+  struct lisp_sexp* nhead = pr.mem;
+
+  if (pr.new) {
+    nhead->root = (struct root_off_t) {
+      .local = false,
+      .am    = 0,
+    };
+  }
+  else {
+    nhead->root = (struct root_off_t) {
+      .local = true,
+      .am    = (nhead - mpp->mem),
+    };
+  }
+
+  if (head->left.sexp == false) {
+    head->left.t.local = !pr.new;
+    head->left.t.am    = (pr.new)? 0: 1;
+    head->left.sexp    = true;
+  }
+  else if (head->right.sexp == false) {
+    head->right.t.local = !pr.new;
+    //head->right.t.am    = (pr.new)? 0: 1;
+    head->right.sexp    = true;
+  }
+
+  head = nhead;
+}
 static inline void lisp_sexp_sym(void) {
-  // TODO: incomplete
+  if (head->left.sexp == neither) {
+    head->left.sexp     = false;
+    head->left.sym.hash = chash;
+  }
+  else if (head->right.sexp == neither) {
+    head->right.sexp     = false;
+    head->right.sym.hash = chash;
+  }
+  else {} // <- TODO
 
   chash.internal.i = 0;
   chash.len        = 0;
   chash.hash       = 0L;
 }
-static inline void lisp_sexp_end(void) { }
+static inline void lisp_sexp_end(void) {
+  // TODO: get the parent address, point to it
+}
 static inline long do_chash(int i, char c) {
   long ret = 0;
 
@@ -66,7 +130,7 @@ static inline struct lisp_cps lisp_ev(struct lisp_cps pstat,
 static inline struct lisp_cps lisp_stat(struct lisp_cps pstat,
                                         enum lisp_pstat sstat) {
   if (sstat & __LISP_PAREN_IN) {
-    lisp_sexp_node();
+    lisp_sexp_node(sexpmpp);
     ++paren;
   }
   if (pstat.master.stat & __LISP_SYMBOL_IN) {
@@ -103,7 +167,24 @@ static inline struct lisp_cps lisp_csym(struct lisp_cps pstat, char c) {
  done:
   return pstat;
 }
-
+static inline struct lisp_cps ev_listen(struct lisp_cps pstat) {
+  enum lisp_pev ev = pstat.master.ev;
+  if (ev & __LISP_SYMBOL_OUT) {
+#ifdef DEBUG
+    fputs("EVENT: symbol out\n", stderr);
+#endif
+    pstat.master.ev &= ~__LISP_SYMBOL_OUT;
+    lisp_sexp_sym();
+  }
+  if (ev & __LISP_PAREN_OUT) {
+#ifdef DEBUG
+    fputs("EVENT: paren out\n", stderr);
+#endif
+    pstat.master.ev &= ~__LISP_PAREN_OUT;
+    lisp_sexp_end();
+  }
+  return pstat;
+}
 static int parse_ioblock(char* buf, uint size) {
   int ret = 0;
 
@@ -139,21 +220,7 @@ static int parse_ioblock(char* buf, uint size) {
       goto done;
     }
     else {
-      enum lisp_pev ev = lcps.master.ev;
-      if (ev & __LISP_SYMBOL_OUT) {
-#ifdef DEBUG
-        fputs("EVENT: symbol out\n", stderr);
-#endif
-        lcps.master.ev &= ~__LISP_SYMBOL_OUT;
-        lisp_sexp_sym();
-      }
-      if (ev & __LISP_PAREN_OUT) {
-#ifdef DEBUG
-        fputs("EVENT: paren out\n", stderr);
-#endif
-        lcps.master.ev &= ~__LISP_PAREN_OUT;
-        lisp_sexp_end();
-      }
+      lcps = ev_listen(lcps);
     }
   }
 
@@ -185,8 +252,16 @@ static int parse_bytstream(int fd) {
 
 int main(void) {
   sexpmp.total = SEXPPOOL;
-  sexpmp.free  = SEXPPOOL;
-  sexpmp.used  = 0;
+  sexpmp.used  = 1;
+
+  sexpmpp = &sexpmp;
+
+  root = head = &sexpmpp->mem[0];
+  ++sexpmpp->used;
+
+  head->root.local  = true;
+  head->left.sexp   = neither;
+  head->right.sexp  = neither;
 
   int ret = parse_bytstream(STDIN_FILENO);
 
@@ -196,4 +271,3 @@ int main(void) {
 
   return ret;
 }
-
