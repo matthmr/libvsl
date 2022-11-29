@@ -112,7 +112,7 @@ struct node_t {
 };
 
 struct lisp_sexp {
-  struct off_t  root;
+  struct node_t root;
   struct node_t left;
   struct node_t right;
 };
