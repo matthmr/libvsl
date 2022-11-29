@@ -3,10 +3,10 @@
 
               .
              / \
-            .   .-------------------.
+            .   =-------------------=
            / \                     / \
-        foo   .                   .   biz
+        foo   =                   .   biz
              / \                 / \
-            .   .------.      bar   nil
+            .   .------.      bar   NIL
            / \        / \
-        bar   biz  foo   nil
+        bar   biz  foo   NIL

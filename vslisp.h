@@ -13,9 +13,8 @@
 #    define neither 0x2
 #  endif
 
-
 #  define IOBLOCK (4096)
-#  define SEXPPOOL (64)
+#  define SEXPPOOL (128)
 
 #  define __LISP_WHITESPACE \
          0x00: \
@@ -48,15 +47,6 @@ typedef unsigned int uint;
 typedef unsigned long ulong;
 typedef unsigned char bool;
 
-struct pool_ret_t {
-  void* mem;
-  //int slave;
-  bool  new; /**
-                0 -> in the same pool
-                1 -> on a different pool
-              */
-};
-
 enum lisp_c {
   __LISP_PAREN_OPEN = '(',
   __LISP_PAREN_CLOSE = ')',
@@ -72,49 +62,59 @@ enum lisp_pstat {
   __LISP_SYMBOL_IN = BIT(1),
 };
 
-struct __lisp_cps_master {
-  enum lisp_pev   ev;
-  enum lisp_pstat stat;
-};
-
 struct lisp_cps {
-  struct __lisp_cps_master master;
-  int                      slave;
+  enum lisp_pstat master;
+  int             slave;
 };
 
-struct __hash_internal {
-  uint i;
-};
-
-struct hash {
-  struct __hash_internal internal;
-  uint len;
+struct lisp_hash {
+  uint  __i;
+  uint  len;
   ulong hash;
 };
 
-struct lisp_sym {
-  struct hash hash;
-  bool        nil;
+enum sexp_t {
+  __SEXP_EMPTY = 0,
+  __SEXP_SEXP,
+  __SEXP_LEXP,
+  __SEXP_SYM,
+  __SEXP_ROOT,
 };
 
 struct off_t {
-  struct lisp_sym sym;
   uint am;
-  bool new; /**
-               0 -> on another pool;
-               offsets become relative
-               to that pool's root
-               1 -> in the same pool
-            */
-  bool sexp; /**
-                0 -> has sexp
-                1 -> has sym
-                2 -> has neither
+  enum sexp_t t; /**
+                   SEXP
+                   ----
+                   (a (b c)) ->     .
+                                   / \
+                                  a   .
+                                     / \
+                                    b   c
+                   LEXP
+                   ----
+                   (a b c) ->       .
+                                   / \
+                                  a   =
+                                     / \
+                                    b   c
+             */
+  int pi; /**
+               >0: look to `pi' pools ahead
+               <0: look to `pi' pools below
+               =0: look in the same pool
              */
 };
 
+struct node_t {
+  struct lisp_hash sym;
+  struct off_t     off;
+};
+
 struct lisp_sexp {
-  struct off_t  root, left, right;
+  struct off_t  root;
+  struct node_t left;
+  struct node_t right;
 };
 
 #endif
