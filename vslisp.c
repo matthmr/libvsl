@@ -13,6 +13,7 @@
 
 static uint paren             = 0;
 static uint deep_paren        = 0;
+static uint hash_i            = 0;
 static char iobuf[IOBLOCK]    = {0};
 
 static struct lisp_hash chash = {0};
@@ -178,7 +179,7 @@ static inline void lisp_sexp_sym(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
   }
 
 done:
-  chash.__i  = 0;
+  hash_i     = 0;
   chash.len  = 0;
   chash.hash = 0L;
 }
@@ -287,8 +288,8 @@ static inline struct lisp_cps lisp_csym(struct lisp_cps pstat, char c) {
   }
 
   ++chash.len;
-  chash.hash += do_chash(chash.__i, c);
-  ++chash.__i;
+  chash.hash += do_chash(hash_i, c);
+  ++hash_i;
 
 #ifdef DEBUG
   fprintf(stderr, "vslisp: character (%c) (0x%lx)\n", c, chash.hash);

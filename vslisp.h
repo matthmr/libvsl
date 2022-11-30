@@ -9,10 +9,6 @@
 #    define true  0x1
 #  endif
 
-#  ifndef neither
-#    define neither 0x2
-#  endif
-
 #  define IOBLOCK (4096)
 #  define SEXPPOOL (128)
 
@@ -68,37 +64,26 @@ struct lisp_cps {
 };
 
 struct lisp_hash {
-  uint  __i;
   uint  len;
   ulong hash;
 };
 
 enum sexp_t {
-  __SEXP_EMPTY = 0,
-  __SEXP_SEXP,
-  __SEXP_LEXP,
-  __SEXP_SYM,
-  __SEXP_ROOT,
+  __SEXP_EMPTY      = 0,
+  __SEXP_SELF_ROOT  = BIT(0),
+  __SEXP_SELF_SEXP  = BIT(1),
+  __SEXP_LEFT_SEXP  = BIT(2),
+  __SEXP_RIGHT_SEXP = BIT(3),
+  __SEXP_SELF_LEXP  = BIT(4),
+  __SEXP_LEFT_LEXP  = BIT(5),
+  __SEXP_RIGHT_LEXP = BIT(6),
+  __SEXP_SELF_SYM   = BIT(7),
+  __SEXP_LEFT_SYM   = BIT(8),
+  __SEXP_RIGHT_SYM  = BIT(9),
 };
 
 struct off_t {
-  uint am;
-  enum sexp_t t; /**
-                   SEXP
-                   ----
-                   (a (b c)) ->     .
-                                   / \
-                                  a   .
-                                     / \
-                                    b   c
-                   LEXP
-                   ----
-                   (a b c) ->       .
-                                   / \
-                                  a   =
-                                     / \
-                                    b   c
-             */
+  int am;
   int pi; /**
                >0: look to `pi' pools ahead
                <0: look to `pi' pools below
@@ -106,15 +91,31 @@ struct off_t {
              */
 };
 
-struct node_t {
+union node_t {
   struct lisp_hash sym;
   struct off_t     off;
 };
 
 struct lisp_sexp {
-  struct node_t root;
-  struct node_t left;
-  struct node_t right;
+  struct off_t root;
+  union node_t left;
+  union node_t right;
+  enum sexp_t  t; /**
+                      SEXP
+                      ----
+                      (a (b c)) ->     .
+                                      / \
+                                     a   .
+                                        / \
+                                       b   c
+                      LEXP
+                      ----
+                      (a b c) ->       .
+                                      / \
+                                     a   =
+                                        / \
+                                       b   c
+                   */
 };
 
 #endif
