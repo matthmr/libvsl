@@ -69,18 +69,26 @@ struct lisp_hash {
 };
 
 enum sexp_t {
-  __SEXP_EMPTY      = 0,
-  __SEXP_SELF_ROOT  = BIT(0),
-  __SEXP_SELF_SEXP  = BIT(1),
-  __SEXP_LEFT_SEXP  = BIT(2),
-  __SEXP_RIGHT_SEXP = BIT(3),
-  __SEXP_SELF_LEXP  = BIT(4),
-  __SEXP_LEFT_LEXP  = BIT(5),
-  __SEXP_RIGHT_LEXP = BIT(6),
-  __SEXP_SELF_SYM   = BIT(7),
-  __SEXP_LEFT_SYM   = BIT(8),
-  __SEXP_RIGHT_SYM  = BIT(9),
+  __SEXP_SELF_ROOT   = BIT(0),
+
+  __SEXP_SELF_SEXP   = BIT(1),
+  __SEXP_LEFT_SEXP   = BIT(2),
+  __SEXP_RIGHT_SEXP  = BIT(3),
+
+  __SEXP_SELF_LEXP   = BIT(4),
+  __SEXP_LEFT_LEXP   = BIT(5),
+  __SEXP_RIGHT_LEXP  = BIT(6),
+
+  __SEXP_LEFT_SYM    = BIT(7),
+  __SEXP_RIGHT_SYM   = BIT(8),
+
+  __SEXP_LEFT_EMPTY  = BIT(9),
+  __SEXP_RIGHT_EMPTY = BIT(10),
+  __SEXP_SELF_EMPTY   = BIT(11),
 };
+
+#  define RIGHT_CHILD_T (__SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)
+#  define LEFT_CHILD_T  (__SEXP_LEFT_SEXP  | __SEXP_LEFT_LEXP)
 
 struct off_t {
   int am;
