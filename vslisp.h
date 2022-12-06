@@ -28,17 +28,6 @@
 #  define __LISP_ALLOWED_IN_NAME(x) \
   (((x) > 0x20) || (x) != 0x7f)
 
-#  define MEMPOOL_TMPL(t) __mempool_##t
-
-#  define MEMPOOL(t,am)            \
-  MEMPOOL_TMPL(t) {                \
-    struct t mem[am];              \
-    struct MEMPOOL_TMPL(t)* next;  \
-    struct MEMPOOL_TMPL(t)* prev;  \
-    uint used;                     \
-    uint total;                    \
-  }
-
 typedef unsigned int uint;
 typedef unsigned long ulong;
 typedef unsigned char bool;
@@ -97,11 +86,7 @@ enum sexp_t {
 
 struct pos_t {
   uint am;
-  int  pi; /**
-               >0: look to `pi' pools ahead
-               <0: look to `pi' pools below
-               =0: look in the same pool
-             */
+  int  pidx;
 };
 
 union node_t {
