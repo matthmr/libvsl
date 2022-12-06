@@ -33,8 +33,8 @@
 #  define MEMPOOL(t,am)            \
   MEMPOOL_TMPL(t) {                \
     struct t mem[am];              \
-    struct MEMPOOL_TMPL(t) * next; \
-    struct MEMPOOL_TMPL(t) * prev; \
+    struct MEMPOOL_TMPL(t)* next;  \
+    struct MEMPOOL_TMPL(t)* prev;  \
     uint used;                     \
     uint total;                    \
   }
@@ -63,9 +63,14 @@ struct lisp_cps {
   int             slave;
 };
 
-struct lisp_hash {
-  uint  len;
+struct lisp_hash_body {
   ulong hash;
+  char  cmask[sizeof(ulong)];
+};
+
+struct lisp_hash {
+  uint len;
+  struct lisp_hash_body body;
 };
 
 enum sexp_t {
@@ -84,15 +89,15 @@ enum sexp_t {
 
   __SEXP_LEFT_EMPTY  = BIT(9),
   __SEXP_RIGHT_EMPTY = BIT(10),
-  __SEXP_SELF_EMPTY   = BIT(11),
+  __SEXP_SELF_EMPTY  = BIT(11),
 };
 
 #  define RIGHT_CHILD_T (__SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)
 #  define LEFT_CHILD_T  (__SEXP_LEFT_SEXP  | __SEXP_LEFT_LEXP)
 
-struct off_t {
-  int am;
-  int pi; /**
+struct pos_t {
+  uint am;
+  int  pi; /**
                >0: look to `pi' pools ahead
                <0: look to `pi' pools below
                =0: look in the same pool
@@ -101,11 +106,11 @@ struct off_t {
 
 union node_t {
   struct lisp_hash sym;
-  struct off_t     off;
+  struct pos_t     pos;
 };
 
 struct lisp_sexp {
-  struct off_t root;
+  struct pos_t root;
   union node_t left;
   union node_t right;
   enum sexp_t  t; /**

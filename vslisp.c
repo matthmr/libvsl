@@ -12,15 +12,14 @@
 //#include "prim.h"
 
 static uint paren             = 0;
-static uint deep_paren        = 0;
+//static uint deep_paren        = 0;
 static uint hash_i            = 0;
 static char iobuf[IOBLOCK]    = {0};
 
 static struct lisp_hash chash = {0};
 static struct lisp_cps   lcps = {0};
 static struct lisp_sexp* head = NULL,
-                       * root = NULL,
-                       * deep = NULL;
+                       * root = NULL;
 
 struct MEMPOOL(lisp_sexp, SEXPPOOL);
 //struct MEMPOOL(lisp_sym_hash, HASHPOOL);
@@ -66,14 +65,18 @@ static inline struct pool_ret_t pool_add_node(struct MEMPOOL_TMPL(lisp_sexp)* mp
 
   return ret;
 }
-static inline struct lisp_sexp* lisp_sexp_node_root(struct MEMPOOL_TMPL(lisp_sexp)* mpp,
+static inline struct lisp_sexp* lisp_sexp_node_root(struct MEMPOOL_TMPL(lisp_sexp)** mpp,
                                                     struct lisp_sexp* head) {
   struct lisp_sexp* ret = head;
-  struct MEMPOOL_TMPL(lisp_sexp)* pp = mpp;
+  struct MEMPOOL_TMPL(lisp_sexp)* pp = *mpp;
   int pi = ret->root.pi;
 
+#ifdef DEBUG
+  fprintf(stderr, ":: lisp_sexp_node_root: ret->root.am = %d\n", ret->root.am);
+#endif
+
   if (!ret->root.pi) {
-    ret = (ret + ret->root.am);
+    ret = ((struct lisp_sexp*)pp->mem + ret->root.am);
   }
   else {
     if (ret->root.pi > 0) {
@@ -88,37 +91,30 @@ static inline struct lisp_sexp* lisp_sexp_node_root(struct MEMPOOL_TMPL(lisp_sex
       }
     }
 
-    ret = (pp->mem + ret->root.am);
+    ret = ((struct lisp_sexp*)pp->mem + ret->root.am);
   }
+
+  *mpp = pp;
+  return ret;
+}
+static inline struct pos_t lisp_sexp_node_to_pos(struct pool_ret_t pr, struct lisp_sexp* head) {
+  struct pos_t ret = {0};
+
+  ret.pi = pr.new;
+  ret.am = (head - (struct lisp_sexp*)pr.base);
 
   return ret;
 }
-static inline struct off_t lisp_sexp_node_set(struct pool_ret_t pr,
-                                              struct lisp_sexp* old_sexp, struct lisp_sexp* new_sexp) {
-  struct off_t ret = {0};
-
-  if (pr.new) {
-    // NOTE: this function is generally called on new memory, it's safe to assume positive offset
-    ret.pi = 1;
-    ret.am = ((struct lisp_sexp*)pr.base - old_sexp);
-  }
-  else {
-    ret.pi = 0;
-    ret.am = (new_sexp - old_sexp);
-  }
-
-  return ret;
-}
-static inline struct lisp_sexp* lisp_sexp_node_get(struct MEMPOOL_TMPL(lisp_sexp)* mpp,
-                                                   struct lisp_sexp* head, enum sexp_t t) {
+static inline struct lisp_sexp* lisp_sexp_node_from_pos(struct MEMPOOL_TMPL(lisp_sexp)* mpp,
+                                                        struct lisp_sexp* head, enum sexp_t t) {
   struct lisp_sexp* ret = head;
   struct MEMPOOL_TMPL(lisp_sexp)* pp = mpp;
   int pi = 0;
 
   if (t & (__SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)) {
-    pi = ret->right.off.pi;
+    pi = ret->right.pos.pi;
     if (!pi) {
-      ret = (ret + ret->right.off.am);
+      ret = ((struct lisp_sexp*)pp->mem + ret->right.pos.am);
     }
     else {
       if (pi > 0) {
@@ -132,13 +128,13 @@ static inline struct lisp_sexp* lisp_sexp_node_get(struct MEMPOOL_TMPL(lisp_sexp
           pp = pp->prev;
         }
       }
-      ret = (pp->mem + ret->right.off.am);
+      ret = ((struct lisp_sexp*)pp->mem + ret->right.pos.am);
     }
   }
   else if (t & (__SEXP_LEFT_SEXP | __SEXP_LEFT_LEXP)) {
-    pi = ret->left.off.pi;
+    pi = ret->left.pos.pi;
     if (!pi) {
-      ret = (ret + ret->left.off.am);
+      ret = ((struct lisp_sexp*)pp->mem + ret->left.pos.am);
     }
     else {
       if (pi > 0) {
@@ -152,29 +148,33 @@ static inline struct lisp_sexp* lisp_sexp_node_get(struct MEMPOOL_TMPL(lisp_sexp
           pp = pp->prev;
         }
       }
-      ret = (pp->mem + ret->left.off.am);
+      ret = ((struct lisp_sexp*)pp->mem + ret->left.pos.am);
     }
   }
 
   return ret;
 }
 static void lisp_sexp_node(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
-#define IF_SAME_POOL_INVERT(x) do { if ((x)->root.pi == 0) { (x)->root.am = -(x)->root.am; } } while (0)
+#ifdef DEBUG
+    fputs("-> lisp_sexp_node()\n", stderr);
+#endif
+
   if (!head) {
+#ifdef DEBUG
+    fputs("  -> EV: attach to root\n", stderr);
+#endif
     head = root;
     return;
   }
 
   struct MEMPOOL_TMPL(lisp_sexp)* mppv = *mpp;
-  struct pool_ret_t pr = pool_add_node(mppv);
+
+  struct pool_ret_t pr    = pool_add_node(mppv);
   struct lisp_sexp* nhead = pr.mem;
 
   if (pr.new) {
     mppv = *mpp = pr.mem;
   }
-
-  nhead->root = lisp_sexp_node_set(pr, head, nhead);
-  IF_SAME_POOL_INVERT(nhead);
 
   nhead->t    = (__SEXP_SELF_SEXP | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
 
@@ -184,10 +184,11 @@ static void lisp_sexp_node(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
          /
         . [nhead]
      */
-    head->left.off   = lisp_sexp_node_set(pr, head, nhead);
-    head->t         &= ~__SEXP_LEFT_EMPTY;
-    head->t         |= __SEXP_LEFT_SEXP;
-    head             = nhead;
+    nhead->root = lisp_sexp_node_to_pos(pr, head);
+    head->left.pos  = lisp_sexp_node_to_pos(pr, nhead);
+    head->t        &= ~__SEXP_LEFT_EMPTY;
+    head->t        |= __SEXP_LEFT_SEXP;
+    head            = nhead;
   }
   else if (head->t & __SEXP_RIGHT_EMPTY) {
     /**
@@ -195,7 +196,8 @@ static void lisp_sexp_node(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
          / \
         ?   . [nhead]
      */
-    head->right.off  = lisp_sexp_node_set(pr, head, nhead);
+    nhead->root = lisp_sexp_node_to_pos(pr, head);
+    head->right.pos  = lisp_sexp_node_to_pos(pr, nhead);
     head->t         &= ~__SEXP_RIGHT_EMPTY;
     head->t         |= __SEXP_RIGHT_SEXP;
     head             = nhead;
@@ -209,9 +211,14 @@ static void lisp_sexp_node(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
                         old memory -> ?   .         [nhead]     `- new memory
      */
 #define OLD_RIGHT (__SEXP_RIGHT_SYM | __SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)
-#define RIGHT_BECOMES_LEFT(x,y) (((x) & (y)) >> 1)
+#define RIGHT_BECOMES_LEFT(x) (((x) & OLD_RIGHT) >> 1)
+
+#ifdef DEBUG
+    fputs("  -> EV: node lexp\n", stderr);
+#endif
 
     pr = pool_add_node(mppv);
+
     struct lisp_sexp* lexp_head = pr.mem;
     struct lisp_sexp  old_head  = *head;
 
@@ -222,42 +229,35 @@ static void lisp_sexp_node(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
     head->t        &= ~OLD_RIGHT;
     head->t        |= __SEXP_RIGHT_LEXP;
 
-    nhead->root     = lisp_sexp_node_set(pr, lexp_head, nhead);
-    IF_SAME_POOL_INVERT(nhead);
+    nhead->root     = lisp_sexp_node_to_pos(pr, lexp_head);
 
-    lexp_head->t    = (RIGHT_BECOMES_LEFT(old_head.t, OLD_RIGHT) | __SEXP_RIGHT_SEXP | __SEXP_SELF_LEXP);
-    lexp_head->root = lisp_sexp_node_set(pr, head, lexp_head);
-    IF_SAME_POOL_INVERT(lexp_head);
-
-    head->right.off = lisp_sexp_node_set(pr, head, lexp_head);
+    lexp_head->t    = (RIGHT_BECOMES_LEFT(old_head.t) | __SEXP_RIGHT_SEXP | __SEXP_SELF_LEXP);
+    lexp_head->root = lisp_sexp_node_to_pos(pr, head);
 
     if (old_head.t & __SEXP_RIGHT_SYM) {
-      lexp_head->left.sym = old_head.right.sym;
+      lexp_head->left.sym   = old_head.right.sym;
     }
     else if (old_head.t & RIGHT_CHILD_T) {
-      struct lisp_sexp* rch = lisp_sexp_node_get(mppv, head, head->t & RIGHT_CHILD_T);
-      lexp_head->left.off   = lisp_sexp_node_set(pr, lexp_head, rch);
-
-      if (!lexp_head->left.off.pi) {
-        rch->root.pi = 0;
-        rch->root.am = -lexp_head->left.off.am;
-      }
-      else {
-        rch->root.pi = -lexp_head->left.off.pi;
-        rch->root.am = lexp_head->left.off.am;
-      }
+      struct lisp_sexp* rch = lisp_sexp_node_from_pos(pr.base, head, head->t & RIGHT_CHILD_T);
+      lexp_head->left.pos   = lisp_sexp_node_to_pos(pr, rch);
+      rch->root             = lisp_sexp_node_to_pos(pr, lexp_head);
     }
 
+    head->right.pos = lisp_sexp_node_to_pos(pr, lexp_head);
     head = lexp_head;
   }
 }
 static void lisp_sexp_sym(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
   if (!head) {
 #ifdef DEBUG
-    fputs("DO: symbol\n", stderr);
+    fputs("-> lisp_do_sym()\n", stderr);
 #endif
     goto done;
   }
+
+#ifdef DEBUG
+  fputs("-> lisp_sexp_sym()\n", stderr);
+#endif
 
   struct MEMPOOL_TMPL(lisp_sexp)* mppv = *mpp;
   struct lisp_sexp* nhead              = NULL;
@@ -272,7 +272,7 @@ static void lisp_sexp_sym(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
     head->t         |= __SEXP_LEFT_SYM;
     head->left.sym   = chash;
   }
-  else if (head->t == __SEXP_RIGHT_EMPTY) {
+  else if (head->t & __SEXP_RIGHT_EMPTY) {
     /**
           ? <- HEAD
          / \
@@ -290,28 +290,37 @@ static void lisp_sexp_sym(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
                                / \
                               ?   *
      */
-#define OLD_RIGHT (__SEXP_RIGHT_SYM | __SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)
+#ifndef OLD_RIGHT
+#  define OLD_RIGHT (__SEXP_RIGHT_SYM | __SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)
+#endif
+#ifdef DEBUG
+    fputs("  -> EV: sym lexp\n", stderr);
+#endif
 
-    struct lisp_sexp ohead = *head;
-    struct pool_ret_t pr   = pool_add_node(mppv);
+    struct lisp_sexp old_head = *head;
+    struct pool_ret_t pr      = pool_add_node(mppv);
 
     if (pr.new) {
-      *mpp          = pr.mem;
+      *mpp      = pr.mem;
     }
 
-    head->t        &= ~OLD_RIGHT;
-    head->t        |= __SEXP_RIGHT_LEXP;
+    head->t    &= ~OLD_RIGHT;
+    head->t    |= __SEXP_RIGHT_LEXP;
 
-    nhead           = pr.mem;
-    nhead->root.am  = (nhead - mppv->mem);
-    nhead->t        = (((ohead.t & OLD_RIGHT) << 1) | __SEXP_RIGHT_SYM);
+    nhead       = pr.mem;
+    nhead->root = lisp_sexp_node_to_pos(pr, head);
+    nhead->t    = (RIGHT_BECOMES_LEFT(old_head.t) | __SEXP_RIGHT_SYM | __SEXP_SELF_LEXP);
 
-    if (ohead.t & __SEXP_RIGHT_SYM) {
-      nhead->left.sym = ohead.right.sym;
+    if (old_head.t & __SEXP_RIGHT_SYM) {
+      nhead->left.sym = old_head.right.sym;
     }
-    else if (ohead.t & (__SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)) {
+    else if (old_head.t & (__SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)) {
+      struct lisp_sexp* rch = lisp_sexp_node_from_pos(pr.base, head, head->t & RIGHT_CHILD_T);
+      nhead->left.pos       = lisp_sexp_node_to_pos(pr, rch);
+      rch->root             = lisp_sexp_node_to_pos(pr, nhead);
     }
 
+    head->right.pos  = lisp_sexp_node_to_pos(pr, nhead);
     nhead->right.sym = chash;
 
     head = nhead;
@@ -320,13 +329,79 @@ static void lisp_sexp_sym(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
 done:
   hash_i     = 0;
   chash.len  = 0;
-  chash.hash = 0L;
+
+  chash.body.hash = 0L;
+  *(ulong*) chash.body.cmask = chash.body.hash;
 }
-static inline void lisp_do_sexp(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
+static void lisp_do_sexp(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
   struct MEMPOOL_TMPL(lisp_sexp)* p = mpp;
+  struct lisp_sexp* _head           = head;
+
+  enum sexp_t t  = 0;
+  bool done_side = false;
 
   for (; p; p = p->prev) {
     p->used = 0;
+  }
+
+  p    = mpp;
+  head = root;
+
+  goto start_algo;
+
+again_algo:
+    if (! done_side) {
+      done_side = true;
+      head      = lisp_sexp_node_from_pos(p, head, head->t & RIGHT_CHILD_T);
+    }
+    else {
+      return;
+    }
+
+start_algo: ;
+  for (;;) {
+left_algo:
+    t = head->t;
+    if (!(t & LEFT_CHILD_T)) {
+#ifdef DEBUG
+        fprintf(stderr, "-> lisp_do_sexp::left = %s", head->left.sym.body.cmask);
+#endif
+root_algo:
+        if (head == root) {
+          goto again_algo;
+        }
+
+        _head = head;
+        head  = lisp_sexp_node_root(&p, head);
+
+        // come from the left: go right, then left again
+        if (_head == lisp_sexp_node_from_pos(p, head, head->t & LEFT_CHILD_T)) {
+          head = lisp_sexp_node_from_pos(p, head, head->t & RIGHT_CHILD_T);
+          t    = head->t;
+          if (t & RIGHT_CHILD_T) {
+            goto left_algo;
+          }
+          else {
+#ifdef DEBUG
+            fprintf(stderr, "-> lisp_do_sexp::right = %s", head->right.sym.body.cmask);
+#endif
+            goto root_algo;
+          }
+        }
+
+        // come from the right: go root again
+        else {
+          if (head == root) {
+            goto again_algo;
+          }
+          else {
+            goto root_algo;
+          }
+        }
+    }
+    else {
+      head = lisp_sexp_node_from_pos(p, head, head->t & LEFT_CHILD_T);
+    }
   }
 
   head = NULL;
@@ -334,40 +409,43 @@ static inline void lisp_do_sexp(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
 }
 static inline void lisp_sexp_end(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
 #ifdef DEBUG
-  fputs("OUT: sexp\n", stderr);
+  fputs("<- lisp_sexp_end()\n", stderr);
 #endif
 
   struct lisp_sexp* phead = head;
 
-  for (;;) {
-    if (!phead->root.pi) {
-      phead = (phead + phead->root.am);
-    }
-    else {
-      phead = (lisp_sexp_node_root(mpp, phead) + phead->root.am);
-    }
+  if (phead == root) {
+    return;
+  }
 
-    if (!(phead->t & __SEXP_SELF_LEXP)) {
+  for (;;) {
+    phead = lisp_sexp_node_root(&mpp, phead);
+
+    if (phead->t & (__SEXP_SELF_SEXP | __SEXP_SELF_ROOT)) {
       break;
     }
   }
 
   head = phead;
 }
-static inline long do_chash(int i, char c) {
-  long ret = 0;
+static inline struct lisp_hash_body do_chash(struct lisp_hash_body body,
+                                             int i, char c) {
+  ulong hash_byt = ((c + i) % 0x100);
 
-  ret   = ((c + i) % 0x100);
-  ret <<= ((i*8)   % 0xffffffffffffffff);
+  i         %= 8;
+  hash_byt <<= (i*8);
 
-  return ret;
+  body.hash      |= hash_byt;
+  body.cmask[i]   = c;
+
+  return body;
 }
 static inline struct lisp_cps lisp_ev(struct lisp_cps pstat,
                                       enum lisp_pev sev) {
   if (sev & __LISP_SYMBOL_OUT) {
     if (pstat.master & __LISP_SYMBOL_IN) {
 #ifdef DEBUG
-      fputs("EVENT: symbol out\n", stderr);
+      fputs("<- EV: symbol out\n", stderr);
 #endif
       pstat.master &= ~__LISP_SYMBOL_IN;
       lisp_sexp_sym(&sexpmpp);
@@ -383,7 +461,7 @@ static inline struct lisp_cps lisp_ev(struct lisp_cps pstat,
     }
 
 #ifdef DEBUG
-    fputs("EVENT: paren out\n", stderr);
+    fputs("<- EV: paren out\n", stderr);
 #endif
 
     if (paren) {
@@ -433,11 +511,11 @@ static inline struct lisp_cps lisp_csym(struct lisp_cps pstat, char c) {
   }
 
   ++chash.len;
-  chash.hash += do_chash(hash_i, c);
+  chash.body = do_chash(chash.body, hash_i, c);
   ++hash_i;
 
 #ifdef DEBUG
-  fprintf(stderr, "vslisp: character (%c) (0x%lx)\n", c, chash.hash);
+  fprintf(stderr, "vslisp: character (%c) (0x%lx)\n", c, chash.body.hash);
 #endif
 
  done:
@@ -452,19 +530,19 @@ static int parse_ioblock(char* buf, uint size) {
     switch (c) {
     case __LISP_PAREN_OPEN:
 #ifdef DEBUG
-      fputs("vslisp: paren_open\n", stderr);
+      fputs("-> EV: paren open\n", stderr);
 #endif
       lcps = lisp_stat(lcps, __LISP_PAREN_IN);
       break;
     case __LISP_PAREN_CLOSE:
 #ifdef DEBUG
-      fputs("vslisp: paren_close\n", stderr);
+      fputs("<- EV: paren close\n", stderr);
 #endif
       lcps = lisp_ev(lcps, __LISP_PAREN_OUT);
       break;
     case __LISP_WHITESPACE:
 #ifdef DEBUG
-      fputs("vslisp: whitespace\n", stderr);
+      fputs("-> EV: whitespace\n", stderr);
 #endif
       lcps = lisp_whitespace(lcps);
       break;
@@ -511,39 +589,6 @@ static int parse_bytstream(int fd) {
   return ret;
 }
 
-#ifdef DEBUG
-static char debug_hash_buf[sizeof(ulong)];
-
-static inline char* debug_symstr(ulong hash) {
-  *(ulong*) debug_hash_buf = hash;
-}
-
-static void debug_ast(struct lisp_sexp* h, uint i) {
-  ulong left_str, right_str;
-
-  for (uint i = 0; i < (sizeof(sexpmp.mem)/sizeof(*sexpmp.mem))/2; i++) {
-    struct lisp_sexp sexp = sexpmp.mem[i];
-
-    if (sexp.t & (__SEXP_LEFT_SYM)) {
-      left_str = sexp.left.sym.hash;
-    }
-    else {
-      left_str = sexp.left.off.am;
-    }
-
-    if (sexp.t & (__SEXP_RIGHT_SYM)) {
-      right_str = sexp.right.sym.hash;
-    }
-    else {
-      right_str = sexp.left.off.am;
-    }
-
-    fprintf(stderr, "[%d] t = %x, left = %lx, right = %lx\n", i,
-            sexp.t, left_str, right_str);
-  }
-}
-#endif
-
 int main(void) {
   sexpmp.total      = SEXPPOOL;
   sexpmp.used       = 1;
@@ -565,11 +610,21 @@ int main(void) {
     write(STDERR_FILENO,
           MSG("[ !! ] vslisp: error while parsing file\n"));
   }
-  else {
+
 #ifdef DEBUG
-    debug_ast(root, 0);
-#endif
+  fputs(iobuf, stdout);
+  for (uint i = 0; i < SEXPPOOL; i++) {
+    struct lisp_sexp* sexp = (struct lisp_sexp*) &sexpmp.mem[i];
+    fprintf(stdout, "(type = %x) (root = %d) (left = %d, %s) (right = %d, %s)\n",
+            sexp->t,
+            sexp->root.am,
+            sexp->left.pos.am,
+            sexp->left.sym.body.cmask,
+            sexp->right.pos.am,
+            sexp->right.sym.body.cmask
+      );
   }
+#endif
 
   return ret;
 }
