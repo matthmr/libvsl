@@ -4,3 +4,6 @@ vslisp
 
 # Dev
 dev/
+
+# Emacs VC
+*.~*~

@@ -10,7 +10,7 @@
 #  endif
 
 #  define IOBLOCK (4096)
-#  define SEXPPOOL (128)
+#  define SEXPPOOL (4)   // DEBUG
 
 #  define __LISP_WHITESPACE \
          0x00: \
@@ -63,6 +63,9 @@ struct lisp_hash {
 };
 
 enum sexp_t {
+  __SEXP_CHILD       = -2,
+  __SEXP_ROOT        = -1,
+
   __SEXP_SELF_ROOT   = BIT(0),
 
   __SEXP_SELF_SEXP   = BIT(1),
@@ -86,7 +89,8 @@ enum sexp_t {
 
 struct pos_t {
   uint am;
-  int  pidx;
+  int  pidx; /** index of the pool section;
+                 mirroed by `pool.h:MEMPOOL::idx' */
 };
 
 union node_t {

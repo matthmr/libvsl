@@ -1,8 +1,5 @@
-// vslisp: a very simple lisp implementation;
+ // vslisp: a very simple lisp implementation;
 //         not bootstrapped
-
-// EDIT: ok... maybe not THAT simple, but still
-//       simple enough as to not be bootstrappABLE
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -13,10 +10,14 @@
 
 #include "vslisp.h"
 #include "pool.h"
-//#include "prim.h"
+
+#ifndef LIBVSL
+//  #include "prim.h"
+#else
+//  #include "libvsl.h"
+#endif
 
 static uint paren             = 0;
-//static uint deep_paren        = 0;
 static uint hash_i            = 0;
 static char iobuf[IOBLOCK]    = {0};
 
@@ -26,130 +27,124 @@ static struct lisp_sexp* head = NULL,
                        * root = NULL;
 
 struct MEMPOOL(lisp_sexp, SEXPPOOL);
+struct MEMPOOL_RET(lisp_sexp);
 //struct MEMPOOL(lisp_sym_hash, HASHPOOL);
-
-struct pool_ret_t {
-  void* mem;
-  void* base;
-  uint  idx;
-  bool  new; /**
-                0 -> in the same pool
-                1 -> on a different pool
-              */
-};
-
-struct sexp_pool_t {
-  struct lisp_sexp*               master;
-  struct MEMPOOL_TMPL(lisp_sexp)* slave;
-};
 
 static struct MEMPOOL_TMPL(lisp_sexp)  sexpmp = {0};
 static struct MEMPOOL_TMPL(lisp_sexp)* sexpmpp = NULL;
 //static struct MEMPOOL_TMPL(lisp_sym_hash) hashmp = {0};
 
-static inline struct pool_ret_t pool_add_node(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
-  // TODO: make this an `int' function because of
-  //       ENOMEM in malloc
-  struct pool_ret_t ret = {
-    .mem  = NULL,
-    .base = mpp,
-    .new  = false,
+static inline void pool_clean(struct MEMPOOL_TMPL(lisp_sexp)* pp) {
+  for (; pp; pp = pp->next) {
+    pp->used = 0;
+  }
+}
+static inline struct MEMPOOL_RET_TMPL(lisp_sexp)
+pool_add_node(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
+  struct MEMPOOL_RET_TMPL(lisp_sexp) ret = {
+    .mem   = NULL,
+    .base  = mpp,
+    .entry = NULL,
+    .same  = true,
   };
 
   if (mpp->used == mpp->total) {
     if (!mpp->next) {
-      mpp->next = malloc(sizeof(struct MEMPOOL_TMPL(lisp_sexp)));
+      mpp->next        = malloc(sizeof(struct MEMPOOL_TMPL(lisp_sexp)));
 
       mpp->next->idx   = (mpp->idx + 1);
       mpp->next->prev  = mpp;
       mpp->next->next  = NULL;
-
-      struct MEMPOOL_TMPL(lisp_sexp)* pp = NULL;
-
-      for (struct MEMPOOL_TMPL(lisp_sexp)* _ = mpp; _; _->prev) {
-        pp = _;
-      }
-
-      mpp->next->base = pp->base;
     }
 
+    ret.same          = false;
     mpp->next->total  = mpp->total;
     mpp->next->used   = 0;
-    mpp               = mpp->next;
-    ret.new           = true;
   }
 
-  ret.mem = (mpp->mem + mpp->used);
+  ret.mem   = mpp;
+  ret.entry = (mpp->mem + mpp->used);
   ++mpp->used;
 
   return ret;
 }
-static inline struct MEMPOOL_TMPL(lisp_sexp)* pool_get_idx(struct MEMPOOL_TMPL(lisp_sexp)* mpp) { }
-static inline struct sexp_pool_t lisp_sexp_node_root(struct MEMPOOL_TMPL(lisp_sexp)* mpp,
-                                                     struct lisp_sexp* head) {
-  struct sexp_pool_t ret;
-  int pidx = ret->root.pidx;
+static inline struct MEMPOOL_RET_TMPL(lisp_sexp)
+pool_from_idx(struct MEMPOOL_TMPL(lisp_sexp)* mpp,
+              uint idx) {
+  struct MEMPOOL_RET_TMPL(lisp_sexp) ret = {0};
+  struct MEMPOOL_TMPL(lisp_sexp)* pp     = mpp;
+  int diff = (idx - mpp->idx);
 
-#ifdef DEBUG
-  fprintf(stderr, ":: lisp_sexp_node_root: ret->root.am = %d\n", ret->root.am);
-#endif
+  if (diff > 0) {
+    for (; diff; --diff) {
+      pp = mpp->next;
+    }
+  }
+  else if (diff < 0) {
+    for (diff = -diff; diff; --diff) {
+      pp = mpp->prev;
+    }
+  }
 
-  if (!ret.master->root.pidx) {
-    ret = ((struct lisp_sexp*)mpp->mem + ret.master->root.am);
+  ret.mem  = pp;
+  ret.base = mpp;
+  ret.same = (bool) (pp == mpp);
+
+  return ret;
+}
+static inline struct pos_t lisp_sexp_node_set_pos(enum sexp_t t,
+                                                  struct MEMPOOL_RET_TMPL(lisp_sexp) pr,
+                                                  struct lisp_sexp* head) {
+  struct pos_t ret      = {0};
+
+  uint off              = 0;
+  struct lisp_sexp* mem = NULL;
+
+  if (!pr.same) {
+    if (t == __SEXP_CHILD) {
+      mem = pr.mem->mem;
+      off = pr.mem->idx;
+    }
+    else if (t == __SEXP_ROOT) {
+      mem = pr.base->mem;
+      off = pr.base->idx;
+    }
   }
   else {
-    pool_get_idx(pp);
-    mpp = pp->base;
-
-    for (uint i = 0; i < pi; i++) {
-      mpp = mpp->next;
-    }
-
-    ret.master = ((struct lisp_sexp*)mpp->mem + ret->root.am);
+    mem = pr.mem->mem;
+    off = pr.mem->idx;
   }
 
-  ret.slave  = mpp;
+  ret.am   = (head - mem);
+  ret.pidx = off;
 
   return ret;
 }
-#define TO_ROOT true
-#define TO_CHILD true
-static inline struct pos_t lisp_sexp_node_set_pos(bool to, struct pool_ret_t pr, struct lisp_sexp* head) {
-  struct pos_t ret;
-
-  ret.pidx = pr.new? (pr.idx + 1): 0;
-  ret.am   = (head - (struct lisp_sexp*)pr.base);
-
-  return ret;
-}
-static inline struct sexp_pool_t lisp_sexp_node_get_pos(struct MEMPOOL_TMPL(lisp_sexp)* mpp,
-                                                        struct lisp_sexp* head, enum sexp_t t) {
-  struct sexp_pool_t ret;
-  struct MEMPOOL_TMPL(lisp_sexp)* pp = mpp;
-  int pidx = 0;
+static inline struct MEMPOOL_RET_TMPL(lisp_sexp)
+lisp_sexp_node_get_pos(enum sexp_t t,
+                       struct MEMPOOL_RET_TMPL(lisp_sexp) pr,
+                       struct lisp_sexp* head) {
+  uint pidx = 0;
+  uint am   = 0;
 
   if (t & (__SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)) {
-    pidx = ret.master->right.pos.pidx;
-    if (!pidx) {
-      ret.master = ((struct lisp_sexp*)pp->mem + ret->right.pos.am);
-    }
-    else {
-      ret.master = ((struct lisp_sexp*)pp->mem + ret->right.pos.am);
-    }
+    pidx = head->right.pos.pidx;
+    am   = head->right.pos.am;
   }
   else if (t & (__SEXP_LEFT_SEXP | __SEXP_LEFT_LEXP)) {
-    pidx = ret.master->left.pos.pidx;
-    if (!pidx) {
-      ret.master = ((struct lisp_sexp*)pp->mem + ret->left.pos.am);
-    }
-    else {
-      ret.master = ((struct lisp_sexp*)pp->mem + ret->left.pos.am);
-    }
+    pidx = head->left.pos.pidx;
+    am   = head->left.pos.am;
+  }
+  else if (t == __SEXP_ROOT) {
+    pidx = head->root.pidx;
+    am   = head->root.am;
   }
 
-  ret.slave      = pp;
+  // TODO: signal that the memory is in another section
+  pr        = pool_from_idx(pr.mem, pidx);
+  pr.entry += am;
 
-  return ret;
+  return pr;
 }
 static void lisp_sexp_node(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
 #ifdef DEBUG
@@ -164,16 +159,15 @@ static void lisp_sexp_node(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
     return;
   }
 
-  struct MEMPOOL_TMPL(lisp_sexp)* mppv = *mpp;
+  struct MEMPOOL_RET_TMPL(lisp_sexp) pr
+                             = pool_add_node(*mpp);
+  struct lisp_sexp* new_head = pr.entry;
 
-  struct pool_ret_t pr       = pool_add_node(mppv);
-  struct lisp_sexp* new_head = pr.mem;
-
-  if (pr.new) {
-    mppv = *mpp = pr.mem;
+  if (!pr.same) {
+    *mpp = pr.mem;
   }
 
-  new_head->t    = (__SEXP_SELF_SEXP | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
+  new_head->t = (__SEXP_SELF_SEXP | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
 
   if (head->t & __SEXP_LEFT_EMPTY) {
     /**
@@ -181,8 +175,8 @@ static void lisp_sexp_node(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
          /
         . [new_head]
      */
-    new_head->root  = lisp_sexp_node_set_pos(TO_ROOT, pr, head);
-    head->left.pos  = lisp_sexp_node_set_pos(TO_CHILD, pr, new_head);
+    new_head->root  = lisp_sexp_node_set_pos(__SEXP_ROOT, pr, head);
+    head->left.pos  = lisp_sexp_node_set_pos(__SEXP_CHILD, pr, new_head);
     head->t        &= ~__SEXP_LEFT_EMPTY;
     head->t        |= __SEXP_LEFT_SEXP;
     head            = new_head;
@@ -193,8 +187,8 @@ static void lisp_sexp_node(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
          / \
         ?   . [new_head]
      */
-    new_head->root   = lisp_sexp_node_set_pos(TO_ROOT, pr, head);
-    head->right.pos  = lisp_sexp_node_set_pos(TO_CHILD, pr, new_head);
+    new_head->root   = lisp_sexp_node_set_pos(__SEXP_ROOT, pr, head);
+    head->right.pos  = lisp_sexp_node_set_pos(__SEXP_CHILD, pr, new_head);
     head->t         &= ~__SEXP_RIGHT_EMPTY;
     head->t         |= __SEXP_RIGHT_SEXP;
     head             = new_head;
@@ -213,37 +207,44 @@ static void lisp_sexp_node(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
 #ifdef DEBUG
     fputs("  -> EV: node lexp\n", stderr);
 #endif
+
+    struct lisp_sexp  old_head  = *head;
     struct lisp_sexp* lexp_head = new_head;
 
-    lexp_head->root  = lisp_sexp_node_set_pos(TO_ROOT, pr, head);
-
-    pr = pool_add_node(mppv);
-
-    new_head                    = pr.mem;
-    struct lisp_sexp  old_head  = *head;
-
-    if (pr.new) {
-      mppv = *mpp = pr.mem;
-    }
+    lexp_head->root = lisp_sexp_node_set_pos(__SEXP_ROOT, pr, head);
+    lexp_head->t    = (RIGHT_BECOMES_LEFT(old_head.t) | __SEXP_RIGHT_SEXP | __SEXP_SELF_LEXP);
 
     head->t        &= ~OLD_RIGHT;
     head->t        |= __SEXP_RIGHT_LEXP;
 
-    new_head->root  = lisp_sexp_node_set_pos(TO_ROOT, pr, lexp_head);
+    pr        = pool_add_node(*mpp);
+    new_head  = pr.entry;
 
-    lexp_head->t    = (RIGHT_BECOMES_LEFT(old_head.t) | __SEXP_RIGHT_SEXP | __SEXP_SELF_LEXP);
-    lexp_head->root = lisp_sexp_node_set_pos(pr, head);
+    if (!pr.same) {
+      *mpp    = pr.mem;
+    }
+
+    new_head->root          = lisp_sexp_node_set_pos(__SEXP_ROOT, pr, lexp_head);
 
     if (old_head.t & __SEXP_RIGHT_SYM) {
       lexp_head->left.sym   = old_head.right.sym;
     }
     else if (old_head.t & RIGHT_CHILD_T) {
-      struct lisp_sexp* rch = lisp_sexp_node_get_pos(pr.base, head, RIGHT_CHILD_T);
-      lexp_head->left.pos   = lisp_sexp_node_set_pos(TO_CHILD, pr, rch);
-      rch->root             = lisp_sexp_node_set_pos(TO_ROOT, pr, lexp_head);
+      struct MEMPOOL_TMPL(lisp_sexp)* mem = pr.mem;
+
+      pr = lisp_sexp_node_get_pos(RIGHT_CHILD_T, pr, head);
+      struct lisp_sexp* rch = pr.entry;
+      pr.mem                = mem;
+
+      if (!pr.same) {
+        *mpp = pr.mem;
+      }
+
+      lexp_head->left.pos   = lisp_sexp_node_set_pos(__SEXP_CHILD, pr, rch);
+      rch->root             = lisp_sexp_node_set_pos(__SEXP_ROOT, pr, lexp_head);
     }
 
-    head->right.pos = lisp_sexp_node_set_pos(TO_CHILD, pr, lexp_head);
+    head->right.pos = lisp_sexp_node_set_pos(__SEXP_CHILD, pr, lexp_head);
     head            = new_head;
   }
 }
@@ -258,8 +259,6 @@ static void lisp_sexp_sym(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
 #ifdef DEBUG
   fputs("-> lisp_sexp_sym()\n", stderr);
 #endif
-
-  struct MEMPOOL_TMPL(lisp_sexp)* mppv = *mpp;
 
   if (head->t & __SEXP_LEFT_EMPTY) {
     /**
@@ -296,30 +295,32 @@ static void lisp_sexp_sym(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
     fputs("  -> EV: sym lexp\n", stderr);
 #endif
 
-    struct lisp_sexp old_head = *head;
-    struct pool_ret_t pr      = pool_add_node(mppv);
+    struct lisp_sexp old_head   = *head;
+    struct MEMPOOL_RET_TMPL(lisp_sexp) pr
+                                = pool_add_node(*mpp);
+    struct lisp_sexp* lexp_head = pr.entry;
 
-    if (pr.new) {
-      *mpp      = pr.mem;
+    if (! pr.same) {
+      *mpp = pr.mem;
     }
 
-    head->t    &= ~OLD_RIGHT;
-    head->t    |= __SEXP_RIGHT_LEXP;
-
-    struct lisp_sexp* lexp_head = pr.mem;
-    lexp_head->root = lisp_sexp_node_set_pos(TO_ROOT, pr, head);
     lexp_head->t    = (RIGHT_BECOMES_LEFT(old_head.t) | __SEXP_RIGHT_SYM | __SEXP_SELF_LEXP);
+    lexp_head->root = lisp_sexp_node_set_pos(__SEXP_ROOT, pr, head);
+
+    head->t        &= ~OLD_RIGHT;
+    head->t        |= __SEXP_RIGHT_LEXP;
 
     if (old_head.t & __SEXP_RIGHT_SYM) {
-      lexp_head->left.sym = old_head.right.sym;
+      lexp_head->left.sym   = old_head.right.sym;
     }
     else if (old_head.t & (__SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)) {
-      struct lisp_sexp* rch = lisp_sexp_node_get_pos(pr.base, head, RIGHT_CHILD_T);
-      lexp_head->left.pos   = lisp_sexp_node_set_pos(TO_CHILD, pr, rch);
-      rch->root             = lisp_sexp_node_set_pos(TO_ROOT, pr, lexp_head);
+      pr = lisp_sexp_node_get_pos(RIGHT_CHILD_T, pr, head);
+      struct lisp_sexp* rch = pr.entry;
+      lexp_head->left.pos   = lisp_sexp_node_set_pos(__SEXP_CHILD, pr, rch);
+      rch->root             = lisp_sexp_node_set_pos(__SEXP_ROOT, pr, lexp_head);
     }
 
-    head->right.pos      = lisp_sexp_node_set_pos(TO_CHILD, pr, lexp_head);
+    head->right.pos      = lisp_sexp_node_set_pos(__SEXP_CHILD, pr, lexp_head);
     lexp_head->right.sym = chash;
 
     head = lexp_head;
@@ -332,7 +333,7 @@ done:
   chash.body.hash = 0L;
   *(ulong*) chash.body.cmask = chash.body.hash;
 }
-static void lisp_do_sexp(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
+static void lisp_do_sexp(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
   /**
      this algorithm is broken up into three states:
 
@@ -348,17 +349,18 @@ static void lisp_do_sexp(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
      state 2. will almost always issue back state 1. or state 3.
    */
 
-  struct MEMPOOL_TMPL(lisp_sexp)* p = *mpp;
-  struct lisp_sexp* _head           = head;
+  pool_clean(mpp);
+
+  struct MEMPOOL_RET_TMPL(lisp_sexp) pp;
+  struct lisp_sexp* _head = head;
+
+  pp.base  = mpp;
+  pp.mem   = mpp;
+  pp.entry = mpp->mem;
 
   enum sexp_t t  = 0;
   bool done_side = false;
 
-  for (; p; p = p->prev) {
-    p->used = 0;
-  }
-
-  p    = (*mpp)->base;
   head = root;
 
   goto start_algo;
@@ -367,13 +369,14 @@ again_algo:
   /** issued another iteration:
         try to go rightwise, then let the leftwise algorithm figure out what to do
    */
-    if (! done_side) {
-      done_side = true;
-      head      = lisp_sexp_node_get_pos(p, head, RIGHT_CHILD_T);
-    }
-    else {
-      return;
-    }
+  if (! done_side) {
+    done_side = true;
+    pp        = lisp_sexp_node_get_pos(RIGHT_CHILD_T, pp, head);
+    head      = pp.entry;
+  }
+  else {
+    return;
+  }
 
 start_algo: ;
   for (;;) {
@@ -392,15 +395,17 @@ root_algo:
         }
 
         _head = head;
-        head  = lisp_sexp_node_root(&p, head);
+        pp    = lisp_sexp_node_get_pos(__SEXP_ROOT, pp, head);
+        head  = pp.entry;
 
-        if (_head == lisp_sexp_node_get_pos(p, head, LEFT_CHILD_T)) {
+        if (_head == lisp_sexp_node_get_pos(LEFT_CHILD_T, pp, head).entry) {
           /** came from the left: go root, then go right, then go left again
                .           ->      .
               / \                 / \
             >*<  ?               *  >?<
           */
-          head = lisp_sexp_node_get_pos(p, head, RIGHT_CHILD_T);
+          pp   = lisp_sexp_node_get_pos(RIGHT_CHILD_T, pp, head);
+          head = pp.entry;
           t    = head->t;
           if (t & RIGHT_CHILD_T) {
             /** right child of common root is SEXP or LEXP:
@@ -434,26 +439,36 @@ root_algo:
         }
     }
     else {
-      head = lisp_sexp_node_get_pos(p, head, LEFT_CHILD_T);
+      pp   = lisp_sexp_node_get_pos(LEFT_CHILD_T, pp, head);
+      head = pp.entry;
     }
   }
 
   head = NULL;
-  *mpp = p;
 }
 static inline void lisp_sexp_end(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
+  // NOTE: `head' will always be on either an orphan SEXP or a paren SEXP,
+  //       and probably on a different section than `root'
+
 #ifdef DEBUG
   fputs("<- lisp_sexp_end()\n", stderr);
 #endif
 
+  struct MEMPOOL_RET_TMPL(lisp_sexp) pp = {0};
   struct lisp_sexp* phead = head;
+
+  pp.mem   =
+  pp.base  = mpp;
+  pp.entry = phead;
+  pp.same  = true;
 
   if (phead == root) {
     return;
   }
 
   for (;;) {
-    phead = lisp_sexp_node_root(&mpp, phead);
+    pp   = lisp_sexp_node_get_pos(__SEXP_ROOT, pp, phead);
+    head = pp.entry;
 
     if (phead->t & (__SEXP_SELF_SEXP | __SEXP_SELF_ROOT)) {
       break;
@@ -503,7 +518,7 @@ static inline struct lisp_cps lisp_ev(struct lisp_cps pstat,
       --paren;
       lisp_sexp_end(sexpmpp);
       if (!paren) {
-        lisp_do_sexp(&sexpmpp);
+        lisp_do_sexp(sexpmpp);
       }
     }
     else {
@@ -623,6 +638,7 @@ static int parse_bytstream(int fd) {
   return ret;
 }
 
+#ifndef LIBVSL
 int main(void) {
   sexpmp.total      = SEXPPOOL;
   sexpmp.used       = 1;
@@ -634,10 +650,9 @@ int main(void) {
   head              = NULL;
   root              = sexpmpp->mem;
 
-  sexpmpp->base     = sexmpmpp;
   sexpmpp->used     = 1;
 
-  root->root.pidx     = 0;
+  root->root.pidx   = 0;
   root->t           = (__SEXP_SELF_ROOT | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
 
   int ret = parse_bytstream(STDIN_FILENO);
@@ -647,11 +662,13 @@ int main(void) {
           MSG("[ !! ] vslisp: error while parsing file\n"));
   }
 
-#ifdef DEBUG
-#  ifdef DEBUG_DUMP_TREE
-  fputs(iobuf, stdout);
+#  ifdef DEBUG
+#    ifdef DEBUG_DUMP_TREE
+  struct MEMPOOL_TMPL(lisp_sexp)* pp = &sexpmp;
+
+loop:
   for (uint i = 0; i < SEXPPOOL; i++) {
-    struct lisp_sexp* sexp = (struct lisp_sexp*) &sexpmp.mem[i];
+    struct lisp_sexp* sexp = ((struct lisp_sexp*) pp->mem + i);
     fprintf(stdout, "(type = %x) (root = %d) (left = %d, %s) (right = %d, %s)\n",
             sexp->t,
             sexp->root.am,
@@ -661,8 +678,13 @@ int main(void) {
             sexp->right.sym.body.cmask
       );
   }
+
+  if ((pp = pp->next)) {
+    goto loop;
+  }
+#    endif
 #  endif
-#endif
 
   return ret;
 }
+#endif
