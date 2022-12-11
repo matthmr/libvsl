@@ -1,4 +1,4 @@
- // vslisp: a very simple lisp implementation;
+// vslisp: a very simple lisp implementation;
 //         not bootstrapped
 
 #include <unistd.h>
@@ -60,6 +60,7 @@ pool_add_node(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
     ret.same          = false;
     mpp->next->total  = mpp->total;
     mpp->next->used   = 0;
+    mpp               = mpp->next;
   }
 
   ret.mem   = mpp;
@@ -77,12 +78,12 @@ pool_from_idx(struct MEMPOOL_TMPL(lisp_sexp)* mpp,
 
   if (diff > 0) {
     for (; diff; --diff) {
-      pp = mpp->next;
+      pp = pp->next;
     }
   }
   else if (diff < 0) {
     for (diff = -diff; diff; --diff) {
-      pp = mpp->prev;
+      pp = pp->prev;
     }
   }
 
@@ -141,7 +142,6 @@ lisp_sexp_node_get_pos(enum sexp_t t,
     am   = head->left.pos.am;
   }
 
-  // TODO: signal that the memory is in another section
   pr       = pool_from_idx(pr.mem, pidx);
   pr.entry = (pr.mem->mem + am);
 
@@ -389,6 +389,7 @@ issue_algo:
     else {
 #ifdef DEBUG
       fputs("  -> rebound root\n", stderr);
+      fputs("  -> lisp_do_sexp::right = exp\n", stderr);
 #endif
       pp   = lisp_sexp_node_get_pos(RIGHT_CHILD_T, pp, head);
       head = pp.entry;
@@ -399,7 +400,6 @@ end_algo:
     /** second time rebounding:
           there's nothing left to seek through; end the algorithm
      */
-    // TODO
     return;
   }
 
@@ -411,7 +411,7 @@ start_algo: ;
             go left again
        */
 #ifdef DEBUG
-      fputs("  -> left_child = exp\n", stderr);
+      fputs("  -> lisp_do_sexp::left = exp\n", stderr);
 #endif
       pp   = lisp_sexp_node_get_pos(LEFT_CHILD_T, pp, head);
       head = pp.entry;
@@ -434,7 +434,7 @@ rebound_algo:
 
         if (t & RIGHT_CHILD_T) {
 #ifdef DEBUG
-          fputs("  -> right_child = exp\n", stderr);
+          fputs("  -> lisp_do_sexp::right = exp\n", stderr);
 #endif
 
           pp   = lisp_sexp_node_get_pos(RIGHT_CHILD_T, pp, head);
@@ -453,7 +453,8 @@ rebound_algo:
           pp    = lisp_sexp_node_get_pos(__SEXP_ROOT, pp, head);
           head  = pp.entry;
 
-          if (_head == lisp_sexp_node_get_pos(LEFT_CHILD_T, pp, head).entry) {
+          if ((head->t & LEFT_CHILD_T)
+              && _head == lisp_sexp_node_get_pos(LEFT_CHILD_T, pp, head).entry) {
 #ifdef DEBUG
             fputs("  -> rebound: from_left\n", stderr);
 #endif
@@ -471,7 +472,7 @@ rebound_algo:
                   continue doing the leftwise algorithm
               */
 #ifdef DEBUG
-              fputs("  -> right_child = exp\n", stderr);
+              fputs("  -> lisp_do_sexp::right = exp\n", stderr);
 #endif
               pp   = lisp_sexp_node_get_pos(RIGHT_CHILD_T, pp, head);
               head = pp.entry;
