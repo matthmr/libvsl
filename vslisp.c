@@ -1,4 +1,4 @@
- // vslisp: a very simple lisp implementation;
+// vslisp: a very simple lisp implementation;
 //         not bootstrapped
 
 #include <unistd.h>
@@ -60,6 +60,7 @@ pool_add_node(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
     ret.same          = false;
     mpp->next->total  = mpp->total;
     mpp->next->used   = 0;
+    mpp               = mpp->next;
   }
 
   ret.mem   = mpp;

@@ -10,7 +10,7 @@
 #  endif
 
 #  define IOBLOCK (4096)
-#  define SEXPPOOL (4)   // DEBUG
+#  define SEXPPOOL (128)
 
 #  define __LISP_WHITESPACE \
          0x00: \
