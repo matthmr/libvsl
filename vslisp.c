@@ -358,160 +358,78 @@ static void lisp_do_sexp(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
   pp.base  = mpp;
   pp.mem   = mpp;
   pp.entry = mpp->mem;
+  head     = root;
 
   enum sexp_t t  = 0;
-  bool done_side = false;
 
-  head = root;
+  goto left_algo;
 
-  goto start_algo;
-
-issue_algo:
-  /** issued another iteration:
-        try to go rightwise, then let the leftwise algorithm figure out what to do
-
-      NOTE:
-        only called when one of the branches hit root
-   */
-  if (! done_side) {
-    done_side = true;
-
-    t = head->t;
-    if (t & (__SEXP_RIGHT_SYM | __SEXP_RIGHT_EMPTY)) {
-      /** right child of common root is SYM or NIL:
-            end it here, there won't be another iteration
-       */
+left_algo:
+  t = head->t;
+  if (t & LEFT_CHILD_T) {
+    /** left child of common root is SEXP or LEXP:
+          go left
+    */
 #ifdef DEBUG
-      fprintf(stderr, "  -> lisp_do_sexp::right = %lx\n", head->right.sym.body.hash);
+    fputs("  -> (std) left = exp\n", stderr);
 #endif
-      goto end_algo;
-    }
-    else {
-#ifdef DEBUG
-      fputs("  -> rebound root\n", stderr);
-      fputs("  -> lisp_do_sexp::right = exp\n", stderr);
-#endif
-      pp   = lisp_sexp_node_get_pos(RIGHT_CHILD_T, pp, head);
-      head = pp.entry;
-    }
+    pp   = lisp_sexp_node_get_pos(LEFT_CHILD_T, pp, head);
+    head = pp.entry;
+    goto left_algo;
   }
   else {
-end_algo:
-    /** second time rebounding:
-          there's nothing left to seek through; end the algorithm
-     */
-    return;
-  }
-
-start_algo: ;
-  for (;;) {
-    t = head->t;
-    if (t & LEFT_CHILD_T) {
-      /** left child of common root is SEXP or LEXP:
-            go left again
-       */
+    /** left child of common root is SEXP or LEXP:
+          try to go right, let leftwise have lead
+    */
 #ifdef DEBUG
-      fputs("  -> lisp_do_sexp::left = exp\n", stderr);
+    fprintf(stderr, "  -> (std) left = %lx\n", head->left.sym.body.hash);
 #endif
-      pp   = lisp_sexp_node_get_pos(LEFT_CHILD_T, pp, head);
+    if (t & RIGHT_CHILD_T) {
+      pp   = lisp_sexp_node_get_pos(RIGHT_CHILD_T, pp, head);
       head = pp.entry;
+      goto left_algo;
     }
-    else {
-      /** left child of common root is SYM or NIL:
-            try to go right
-       */
+    /** left child of common root is SYM or NIL:
+          go root, then try to go right, then let leftwise have lead
+    */
 #ifdef DEBUG
-        fprintf(stderr, "  -> lisp_do_sexp::left = %lx\n", head->left.sym.body.hash);
+    fprintf(stderr, "  -> (rebound) right = %lx\n", head->right.sym.body.hash);
 #endif
-
-rebound_algo:
-        if (head == root) {
-#ifdef DEBUG
-          fputs("  -> hit root\n", stderr);
-#endif
-          goto issue_algo;
-        }
-
-        if (t & RIGHT_CHILD_T) {
-#ifdef DEBUG
-          fputs("  -> lisp_do_sexp::right = exp\n", stderr);
-#endif
-
-          pp   = lisp_sexp_node_get_pos(RIGHT_CHILD_T, pp, head);
-          head = pp.entry;
-          continue;
-        }
-        else {
-          /** right child of common root is SYM or NIL:
-                go root; let the rebound algorithm figure out what to do
-           */
-#ifdef DEBUG
-          fprintf(stderr, "  -> lisp_do_sexp::right = %lx\n", head->right.sym.body.hash);
-#endif
-
-          _head = head;
-          pp    = lisp_sexp_node_get_pos(__SEXP_ROOT, pp, head);
-          head  = pp.entry;
-
-          if ((head->t & LEFT_CHILD_T)
-              && _head == lisp_sexp_node_get_pos(LEFT_CHILD_T, pp, head).entry) {
-#ifdef DEBUG
-            fputs("  -> rebound: from_left\n", stderr);
-#endif
-            /** rebound: came from the left:
-                go right, then let the leftwise algorithm
-
-                 .           ->      .
-                / \                 / \
-              >*<  ?               *  >?<
-            */
-            t    = head->t;
-
-            if (t & RIGHT_CHILD_T) {
-              /** right child of common root is SEXP or LEXP:
-                  continue doing the leftwise algorithm
-              */
-#ifdef DEBUG
-              fputs("  -> lisp_do_sexp::right = exp\n", stderr);
-#endif
-              pp   = lisp_sexp_node_get_pos(RIGHT_CHILD_T, pp, head);
-              head = pp.entry;
-              continue;
-            }
-            else {
-              /** right child of common root is SYM or NIL:
-                  go root; let the rebound algorithm figure out what to do
-              */
-#ifdef DEBUG
-              fprintf(stderr, "  -> lisp_do_sexp::right = %lx\n", head->right.sym.body.hash);
-#endif
-              goto rebound_algo;
-            }
-          }
-
-          else {
-#ifdef DEBUG
-            fputs("  -> rebound: from_right\n", stderr);
-#endif
-            /** rebound: came from the right:
-                go root again; let the leftwise algorithm figure out what to do
-                 .                >.<
-                / \    ^    ->    / \
-               ?  >.<  |         ?   .
-            */
-            if (head == root) {
-#ifdef DEBUG
-              fputs("  -> hit root\n", stderr);
-#endif
-              goto issue_algo;
-            }
-            else {
-              goto rebound_algo;
-            }
-          }
-        }
-    }
   }
+
+  /** rebound: try to go root again:
+        - if already on global root issue `issue_algo'
+        - if not on global root, go root then go right
+  */
+rebound_from_right:
+  /** right child of common root is SYM or NIL:
+        go root; let the rebound algorithm figure out what to do
+  */
+  if (head == root) {
+#ifdef DEBUG
+    fputs("  -> HIT ROOT\n", stderr);
+#endif
+    return; // TODO
+  }
+
+  _head = head;
+  pp    = lisp_sexp_node_get_pos(__SEXP_ROOT, pp, head);
+  head  = pp.entry;
+  t     = head->t;
+
+  if (_head == lisp_sexp_node_get_pos(RIGHT_CHILD_T, pp, head).entry) {
+    goto rebound_from_right;
+  }
+
+  /** right child of common root is SEXP or LEXP:
+        go root, then go right, then let leftwise have lead
+  */
+#ifdef DEBUG
+  fputs("  -> (rebound) right = exp\n", stderr);
+#endif
+  pp   = lisp_sexp_node_get_pos(RIGHT_CHILD_T, pp, head);
+  head = pp.entry;
+  goto left_algo;
 
   head = NULL;
 }
