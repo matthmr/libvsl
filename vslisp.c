@@ -157,6 +157,7 @@ static void lisp_sexp_node(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
     fputs("  -> EV: attach to root\n", stderr);
 #endif
     head = root;
+    (*mpp)->used = 1;
     return;
   }
 
@@ -362,8 +363,6 @@ static void lisp_do_sexp(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
 
   enum sexp_t t  = 0;
 
-  goto left_algo;
-
 left_algo:
   t = head->t;
   if (t & LEFT_CHILD_T) {
@@ -449,6 +448,9 @@ static inline void lisp_sexp_end(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
   pp.entry = phead;
   pp.same  = true;
 
+  bool lexp_head = ((phead->t & __SEXP_SELF_LEXP) && true);
+
+again:
   if (phead == root) {
     return;
   }
@@ -460,6 +462,11 @@ static inline void lisp_sexp_end(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
     if (phead->t & (__SEXP_SELF_SEXP | __SEXP_SELF_ROOT)) {
       break;
     }
+  }
+
+  if (lexp_head) {
+    lexp_head = false;
+    goto again;
   }
 
   head = phead;
@@ -636,8 +643,6 @@ int main(void) {
 
   head              = NULL;
   root              = sexpmpp->mem;
-
-  sexpmpp->used     = 1;
 
   root->t           = (__SEXP_SELF_ROOT | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
 
