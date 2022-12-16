@@ -196,6 +196,7 @@ static void lisp_sexp_node(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
     head             = new_head;
   }
   else {
+    // TODO: there's a bug here somewhere; probably with `lisp_sexp_node_get_pos'
     /**
        ? <- HEAD [old_head]           ?
       / \                    ===>    / \
@@ -237,10 +238,6 @@ static void lisp_sexp_node(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
       pr = lisp_sexp_node_get_pos(RIGHT_CHILD_T, pr, head);
       struct lisp_sexp* rch = pr.entry;
       pr.mem                = mem;
-
-      if (!pr.same) {
-        *mpp = pr.mem;
-      }
 
       lexp_head->left.pos   = lisp_sexp_node_set_pos(__SEXP_CHILD, pr, rch);
       rch->root             = lisp_sexp_node_set_pos(__SEXP_ROOT, pr, lexp_head);
@@ -317,6 +314,7 @@ static void lisp_sexp_sym(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
     }
     else if (old_head.t & (__SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)) {
       pr = lisp_sexp_node_get_pos(RIGHT_CHILD_T, pr, head);
+
       struct lisp_sexp* rch = pr.entry;
       lexp_head->left.pos   = lisp_sexp_node_set_pos(__SEXP_CHILD, pr, rch);
       rch->root             = lisp_sexp_node_set_pos(__SEXP_ROOT, pr, lexp_head);
@@ -337,6 +335,9 @@ done:
 }
 static void lisp_do_sexp(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
   /**
+     algorithm
+     ---------
+
      this algorithm is broken up into three states:
 
        1. leftwise
@@ -346,9 +347,17 @@ static void lisp_do_sexp(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
      the default state is state 1. If the left child is a symbol,
      then state 3. is issued.
 
-     state 3. can then either issue state 2. or itself.
+     state 3. can then either issue state 2. or itself again.
 
-     state 2. will almost always issue back state 1. or state 3.
+     state 2. will issue back state 1. If the right child is a symbol,
+     then state 3 is issued.
+
+     stage 3.
+     --------
+
+     stage 3a: if rebounding from stage 1. do stage 2.
+     stage 3b: if rebounding from stage 2. do stage 3.
+     if hit root from stage 3b stop the algorithm.
    */
 
   pool_clean(mpp);
@@ -363,52 +372,54 @@ static void lisp_do_sexp(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
 
   enum sexp_t t  = 0;
 
-left_algo:
+stage1:
   t = head->t;
   if (t & LEFT_CHILD_T) {
-    /** left child of common root is SEXP or LEXP:
-          go left
+    /** left child of common root is EXP:
+          stage 1
     */
 #ifdef DEBUG
     fputs("  -> (std) left = exp\n", stderr);
 #endif
     pp   = lisp_sexp_node_get_pos(LEFT_CHILD_T, pp, head);
     head = pp.entry;
-    goto left_algo;
+    goto stage1;
   }
   else {
-    /** left child of common root is SEXP or LEXP:
-          try to go right, let leftwise have lead
+    /** left child of common root is SYM:
+          stage 3a
     */
 #ifdef DEBUG
     fprintf(stderr, "  -> (std) left = %lx\n", head->left.sym.body.hash);
 #endif
+
+    /** stage3a: */
     if (t & RIGHT_CHILD_T) {
+#ifdef DEBUG
+      fputs("  -> (rebound-left) right = exp\n", stderr);
+#endif
       pp   = lisp_sexp_node_get_pos(RIGHT_CHILD_T, pp, head);
       head = pp.entry;
-      goto left_algo;
+      goto stage1;
     }
-    /** left child of common root is SYM or NIL:
-          go root, then try to go right, then let leftwise have lead
+
+    /** right child of common root is SYM:
+          stage3b
     */
 #ifdef DEBUG
-    fprintf(stderr, "  -> (rebound) right = %lx\n", head->right.sym.body.hash);
+    fprintf(stderr, "  -> (rebound-left) right = %lx\n", head->right.sym.body.hash);
 #endif
   }
 
-  /** rebound: try to go root again:
-        - if already on global root issue `issue_algo'
-        - if not on global root, go root then go right
-  */
-rebound_from_right:
-  /** right child of common root is SYM or NIL:
-        go root; let the rebound algorithm figure out what to do
-  */
+stage3b:
   if (head == root) {
 #ifdef DEBUG
+    if (t == (__SEXP_RIGHT_SYM | __SEXP_RIGHT_EMPTY)) {
+      fprintf(stderr, "  -> (rebound-right) right = %lx\n", head->right.sym.body.hash);
+    }
     fputs("  -> HIT ROOT\n", stderr);
 #endif
-    return; // TODO
+    return;
   }
 
   _head = head;
@@ -417,18 +428,27 @@ rebound_from_right:
   t     = head->t;
 
   if (_head == lisp_sexp_node_get_pos(RIGHT_CHILD_T, pp, head).entry) {
-    goto rebound_from_right;
+    goto stage3b;
   }
 
-  /** right child of common root is SEXP or LEXP:
-        go root, then go right, then let leftwise have lead
-  */
+  if (t & RIGHT_CHILD_T) {
+    /** right child of common root is EXP:
+          stage2
+    */
 #ifdef DEBUG
-  fputs("  -> (rebound) right = exp\n", stderr);
+    fputs("  -> (rebound-right) right = exp\n", stderr);
 #endif
-  pp   = lisp_sexp_node_get_pos(RIGHT_CHILD_T, pp, head);
-  head = pp.entry;
-  goto left_algo;
+    /** stage 2: */
+    pp   = lisp_sexp_node_get_pos(RIGHT_CHILD_T, pp, head);
+    head = pp.entry;
+    goto stage1;
+  }
+  else {
+#ifdef DEBUG
+    fprintf(stderr, "  -> (rebound-left) right = %lx\n", head->right.sym.body.hash);
+#endif
+    goto stage3b;
+  }
 
   head = NULL;
 }
