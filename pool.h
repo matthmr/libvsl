@@ -38,8 +38,8 @@
    MEMPOOL_RET(t)
    --------------
 
-   @mem:   current memory pool        (what we attach)
-   @base:  base memory pool           (what we attach to)
+   @mem:   current memory pool        (what we attach, child)
+   @base:  base memory pool           (what we attach to, root)
    @entry: current memory pool entry
    @same:  inclusion boolean
  */

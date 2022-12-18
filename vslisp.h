@@ -63,9 +63,6 @@ struct lisp_hash {
 };
 
 enum sexp_t {
-  __SEXP_CHILD       = -2,
-  __SEXP_ROOT        = -1,
-
   __SEXP_SELF_ROOT   = BIT(0),
 
   __SEXP_SELF_SEXP   = BIT(1),
@@ -84,8 +81,10 @@ enum sexp_t {
   __SEXP_SELF_EMPTY  = BIT(11),
 };
 
-#  define RIGHT_CHILD_T (__SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)
-#  define LEFT_CHILD_T  (__SEXP_LEFT_SEXP  | __SEXP_LEFT_LEXP)
+#  define CHILD       (-0)
+#  define ROOT        (-1)
+#  define RIGHT_CHILD (__SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)
+#  define LEFT_CHILD  (__SEXP_LEFT_SEXP  | __SEXP_LEFT_LEXP)
 
 struct pos_t {
   uint am;
@@ -114,10 +113,18 @@ struct lisp_sexp {
                       ----
                       (a b c) ->       .
                                       / \
-                                     a   =
+                                     a   ,
                                         / \
                                        b   c
                    */
 };
+
+#endif
+
+#ifndef LOCK_VSLISP_FUNC
+#  define LOCK_VSLISP_FUNC
+
+#  define RIGHT (__SEXP_RIGHT_SYM | __SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)
+#  define SWAP_RL(x) (((x) & RIGHT) >> 1)
 
 #endif
