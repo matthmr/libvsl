@@ -34,9 +34,18 @@ static struct MEMPOOL_TMPL(lisp_sexp)  sexpmp = {0};
 static struct MEMPOOL_TMPL(lisp_sexp)* sexpmpp = NULL;
 //static struct MEMPOOL_TMPL(lisp_sym_hash) hashmp = {0};
 
-static inline void pool_clean(struct MEMPOOL_TMPL(lisp_sexp)* pp) {
+static inline void pool_clean_curr(struct MEMPOOL_TMPL(lisp_sexp)* pp) {
   for (; pp; pp = pp->next) {
     pp->used = 0;
+  }
+}
+static inline void pool_set_next(struct MEMPOOL_TMPL(lisp_sexp)* pp) {
+  uint pn = pp->total;
+
+  for (; pp; pp = pp->next) {
+    for (uint i = 0; i < pn; ++i) {
+      pp->mem[i].t = 0;
+    }
   }
 }
 static inline struct MEMPOOL_RET_TMPL(lisp_sexp)
@@ -94,9 +103,10 @@ pool_from_idx(struct MEMPOOL_TMPL(lisp_sexp)* mpp,
 
   return ret;
 }
-static inline struct pos_t lisp_sexp_node_set_pos(enum sexp_t t,
-                                                  struct MEMPOOL_RET_TMPL(lisp_sexp) pr,
-                                                  struct lisp_sexp* head) {
+static inline struct pos_t
+lisp_sexp_node_set_pos(enum sexp_t t,
+                       struct MEMPOOL_RET_TMPL(lisp_sexp) pr,
+                       struct lisp_sexp* head) {
   struct pos_t ret      = {0};
 
   uint off              = 0;
@@ -150,7 +160,8 @@ static void lisp_sexp_node_add(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
 #ifdef DEBUG
     fputs("  -> EV: attach to root\n", stderr);
 #endif
-    head = root;
+    root->t      = (__SEXP_SELF_ROOT | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
+    head         = root;
     (*mpp)->used = 1;
     return;
   }
@@ -374,7 +385,7 @@ static void lisp_do_sexp(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
      if hit root from stage 3b stop the algorithm.
    */
 
-  pool_clean(mpp);
+  pool_clean_curr(mpp);
 
   struct MEMPOOL_RET_TMPL(lisp_sexp) pp;
   struct lisp_sexp* _head = head;
@@ -433,7 +444,7 @@ stage3b:
     }
     fputs("  -> HIT ROOT\n", stderr);
 #endif
-    return;
+    goto done;
   }
 
   _head = head;
@@ -464,6 +475,8 @@ stage3b:
     goto stage3b;
   }
 
+done:
+  pool_set_next(mpp);
   head = NULL;
 }
 static inline void lisp_sexp_end(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
