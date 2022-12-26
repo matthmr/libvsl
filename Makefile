@@ -1,13 +1,22 @@
-all: vslisp
+all: libvsl
 
-vslisp.o: vslisp.c vslisp.h
-vslisp: vslisp.o
+OBJECTS:=vslisp.o symtab.o
+TARGETS:=libvsl prevsl
 
-OBJECTS:=vslisp.o
-TARGETS:=vslisp
+vslisp.o: vslisp.c vslisp.h pool.h symtab.h
+symtab.o: symtab.c symtab.h
+
+prevsl.o: prevsl.c
+
+prevsl: symtab.o prevsl.o
+libvsl: symtab.o vslisp.o prevsl
 
 CC?=clang
 CFLAGS?=-Wall
+
+$(TARGETS):
+	@echo "CC" $@
+	@$(CC) -c $(CFLAGS) $(CFLAGSADD) $< -o $@
 
 $(OBJECTS):
 	@echo "CC" $@

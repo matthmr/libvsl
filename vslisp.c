@@ -11,11 +11,7 @@
 #include "vslisp.h"
 #include "pool.h"
 
-#ifndef LIBVSL
-//  #include "prim.h"
-#else
-//  #include "libvsl.h"
-#endif
+#include "prim.h"
 
 static uint paren             = 0;
 static uint hash_i            = 0;
@@ -34,15 +30,11 @@ static struct MEMPOOL_TMPL(lisp_sexp)  sexpmp = {0};
 static struct MEMPOOL_TMPL(lisp_sexp)* sexpmpp = NULL;
 //static struct MEMPOOL_TMPL(lisp_sym_hash) hashmp = {0};
 
-static inline void pool_clean_curr(struct MEMPOOL_TMPL(lisp_sexp)* pp) {
-  for (; pp; pp = pp->next) {
-    pp->used = 0;
-  }
-}
-static inline void pool_set_next(struct MEMPOOL_TMPL(lisp_sexp)* pp) {
+static inline void pool_clean(struct MEMPOOL_TMPL(lisp_sexp)* pp) {
   uint pn = pp->total;
 
   for (; pp; pp = pp->next) {
+    pp->used = 0;
     for (uint i = 0; i < pn; ++i) {
       pp->mem[i].t = 0;
     }
@@ -385,8 +377,6 @@ static void lisp_do_sexp(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
      if hit root from stage 3b stop the algorithm.
    */
 
-  pool_clean_curr(mpp);
-
   struct MEMPOOL_RET_TMPL(lisp_sexp) pp;
   struct lisp_sexp* _head = head;
 
@@ -476,7 +466,7 @@ stage3b:
   }
 
 done:
-  pool_set_next(mpp);
+  pool_clean(mpp);
   head = NULL;
 }
 static inline void lisp_sexp_end(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
@@ -679,7 +669,6 @@ static int parse_bytstream(int fd) {
   return ret;
 }
 
-#ifndef LIBVSL
 int main(void) {
   sexpmp.total      = SEXPPOOL;
   sexpmp.used       = 1;
@@ -700,29 +689,5 @@ int main(void) {
           MSG("[ !! ] vslisp: error while parsing file\n"));
   }
 
-#  ifdef DEBUG
-#    ifdef DEBUG_DUMP_TREE
-  struct MEMPOOL_TMPL(lisp_sexp)* pp = &sexpmp;
-
-loop:
-  for (uint i = 0; i < SEXPPOOL; i++) {
-    struct lisp_sexp* sexp = ((struct lisp_sexp*) pp->mem + i);
-    fprintf(stdout, "(type = %x) (root = %d) (left = %d, %s) (right = %d, %s)\n",
-            sexp->t,
-            sexp->root.am,
-            sexp->left.pos.am,
-            sexp->left.sym.body.cmask,
-            sexp->right.pos.am,
-            sexp->right.sym.body.cmask
-      );
-  }
-
-  if ((pp = pp->next)) {
-    goto loop;
-  }
-#    endif
-#  endif
-
   return ret;
 }
-#endif

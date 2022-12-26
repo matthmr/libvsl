@@ -4,15 +4,11 @@ A very small implementation of lisp, nothing too fancy.
 
 ## Building
 
-Run `make vslisp` to compile the test project. `make` variables are:
+Run `make libvsl` to compile the project. `make` variables are:
 
 - `CC` - the C compiler
 - `CFLAGS` - `CC` major flags
 - `CFLAGSADD` - `CC` minor flags
-
-The test version of the project is not a real programming language, rather just
-a demonstration. To implement `vsl` as a functional language, read the next
-section.
 
 ## Usage in other projects
 
@@ -79,6 +75,27 @@ C-d
 hello world
 $
 ```
+
+# NOTE -- 20221226
+
+If you saw this source tree under commit `123c482a` or lower, you may notice
+that the repository had a stub around `main` on the `vslisp.c` file. That was
+because the main version of `vslisp` was just for debugging (and also `vslisp`
+was a compilable target), and `vlisp.c` could be made to forego `main` and
+become `libvsl`, with another file taking the role to host `main`.
+
+As of the date of this note, the project has become a pure template, with no
+stub around `main`. However the names of the files stay the same to avoid
+future merge conflicts (so sorry for the misleading names :))
+
+## TL;DR
+
+The project produces two binaries:
+
+- `prevsl`
+- `libvsl`
+
+Use the former to link to the latter.
 
 # License
 
