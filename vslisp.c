@@ -4,14 +4,12 @@
 #include <unistd.h>
 #include <stdlib.h>
 
-#ifdef DEBUG
-#  include <stdio.h>
-#endif
+#include "debug.h"
 
 #include "vslisp.h"
 #include "pool.h"
 
-#include "prim.h"
+// #include "prim.h"
 
 static uint paren             = 0;
 static uint hash_i            = 0;
@@ -144,14 +142,10 @@ lisp_sexp_node_get_pos(enum sexp_t t,
   return pr;
 }
 static void lisp_sexp_node_add(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
-#ifdef DEBUG
-    fputs("-> lisp_sexp_node_add()\n", stderr);
-#endif
+  DB_MSG("-> lisp_sexp_node_add()");
 
   if (!head) {
-#ifdef DEBUG
-    fputs("  -> EV: attach to root\n", stderr);
-#endif
+    DB_MSG("  -> EV: attach to root");
     root->t      = (__SEXP_SELF_ROOT | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
     head         = root;
     (*mpp)->used = 1;
@@ -200,9 +194,7 @@ static void lisp_sexp_node_add(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
                                        / \                      `
                         old memory -> ?   .         [new_head]  `- new memory
      */
-#ifdef DEBUG
-    fputs("  -> EV: node lexp\n", stderr);
-#endif
+    DB_MSG("  -> EV: node lexp");
 
     /** save the old state of `head', swap the memory for `new_head' to `lexp_head'
      */
@@ -258,15 +250,11 @@ static void lisp_sexp_node_add(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
 }
 static void lisp_sexp_sym(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
   if (!head) {
-#ifdef DEBUG
-    fputs("-> lisp_do_sym()\n", stderr);
-#endif
+    DB_MSG("-> lisp_do_sym()");
     goto done;
   }
 
-#ifdef DEBUG
-  fputs("-> lisp_sexp_sym()\n", stderr);
-#endif
+  DB_MSG("-> lisp_sexp_sym()");
 
   if (head->t & __SEXP_LEFT_EMPTY) {
     /**
@@ -296,9 +284,7 @@ static void lisp_sexp_sym(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
                                / \
                               ?   *
      */
-#ifdef DEBUG
-    fputs("  -> EV: sym lexp\n", stderr);
-#endif
+    DB_MSG("  -> EV: sym lexp");
 
     /** save the old state of `head', get new memory for `lexp_head'
           - possible chance of changing the thread of `mpp'
@@ -393,9 +379,7 @@ stage1:
     /** left child of common root is EXP:
           stage 1
     */
-#ifdef DEBUG
-    fputs("  -> (std) left = exp\n", stderr);
-#endif
+    DB_MSG("  -> (std) left = exp");
     pp   = lisp_sexp_node_get_pos(LEFT_CHILD, pp, head);
     head = pp.entry;
     goto stage1;
@@ -404,15 +388,11 @@ stage1:
     /** left child of common root is SYM:
           stage 3a
     */
-#ifdef DEBUG
-    fprintf(stderr, "  -> (std) left = %lx\n", head->left.sym.body.hash);
-#endif
+    DB_FMT("  -> (std) left = %lx", head->left.sym.body.hash);
 
     /** stage3a: */
     if (t & RIGHT_CHILD) {
-#ifdef DEBUG
-      fputs("  -> (rebound-left) right = exp\n", stderr);
-#endif
+      DB_MSG("  -> (rebound-left) right = exp");
       pp   = lisp_sexp_node_get_pos(RIGHT_CHILD, pp, head);
       head = pp.entry;
       goto stage1;
@@ -421,9 +401,7 @@ stage1:
     /** right child of common root is SYM:
           stage3b
     */
-#ifdef DEBUG
-    fprintf(stderr, "  -> (rebound-left) right = %lx\n", head->right.sym.body.hash);
-#endif
+    DB_FMT("  -> (rebound-left) right = %lx", head->right.sym.body.hash);
   }
 
 stage3b:
@@ -450,18 +428,14 @@ stage3b:
     /** right child of common root is EXP:
           stage2
     */
-#ifdef DEBUG
-    fputs("  -> (rebound-right) right = exp\n", stderr);
-#endif
+    DB_MSG("  -> (rebound-right) right = exp");
     /** stage 2: */
     pp   = lisp_sexp_node_get_pos(RIGHT_CHILD, pp, head);
     head = pp.entry;
     goto stage1;
   }
   else {
-#ifdef DEBUG
-    fprintf(stderr, "  -> (rebound-left) right = %lx\n", head->right.sym.body.hash);
-#endif
+    DB_FMT("  -> (rebound-left) right = %lx", head->right.sym.body.hash);
     goto stage3b;
   }
 
@@ -473,9 +447,7 @@ static inline void lisp_sexp_end(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
   // NOTE: `head' will always be on either an orphan EXP or a paren EXP,
   //       and probably on a different section than `root'
 
-#ifdef DEBUG
-  fputs("<- lisp_sexp_end()\n", stderr);
-#endif
+  DB_MSG("<- lisp_sexp_end()");
 
   struct MEMPOOL_RET_TMPL(lisp_sexp) pp = {0};
   struct lisp_sexp* phead = head;
@@ -508,15 +480,15 @@ again:
 
   head = phead;
 }
-static inline struct lisp_hash_body do_chash(struct lisp_hash_body body,
+struct lisp_hash_body do_chash(struct lisp_hash_body body,
                                              int i, char c) {
   ulong hash_byt = ((c + i) % 0x100);
 
   i         %= 8;
   hash_byt <<= (i*8);
 
-  body.hash      |= hash_byt;
-  body.cmask[i]   = c;
+  body.hash     |= hash_byt;
+  body.cmask[i]  = c;
 
   return body;
 }
@@ -524,9 +496,7 @@ static inline struct lisp_cps lisp_ev(struct lisp_cps pstat,
                                       enum lisp_pev sev) {
   if (sev & __LISP_SYMBOL_OUT) {
     if (pstat.master & __LISP_SYMBOL_IN) {
-#ifdef DEBUG
-      fputs("<- EV: symbol out\n", stderr);
-#endif
+      DB_MSG("<- EV: symbol out");
       pstat.master &= ~__LISP_SYMBOL_IN;
       lisp_sexp_sym(&sexpmpp);
     }
@@ -540,9 +510,7 @@ static inline struct lisp_cps lisp_ev(struct lisp_cps pstat,
       pstat = lisp_ev(pstat, __LISP_SYMBOL_OUT);
     }
 
-#ifdef DEBUG
-    fputs("<- EV: paren out\n", stderr);
-#endif
+    DB_MSG("<- EV: paren out");
 
     if (paren) {
       pstat.master &= ~__LISP_PAREN_IN;
@@ -594,9 +562,7 @@ static inline struct lisp_cps lisp_csym(struct lisp_cps pstat, char c) {
   chash.body = do_chash(chash.body, hash_i, c);
   ++hash_i;
 
-#ifdef DEBUG
-  fprintf(stderr, "vslisp: character (%c) (0x%lx)\n", c, chash.body.hash);
-#endif
+  DB_FMT("vslisp: character (%c) (0x%lx)", c, chash.body.hash);
 
  done:
   return pstat;
@@ -609,21 +575,15 @@ static int parse_ioblock(char* buf, uint size) {
 
     switch (c) {
     case __LISP_PAREN_OPEN:
-#ifdef DEBUG
-      fputs("-> EV: paren open\n", stderr);
-#endif
+      DB_MSG("-> EV: paren open");
       lcps = lisp_stat(lcps, __LISP_PAREN_IN);
       break;
     case __LISP_PAREN_CLOSE:
-#ifdef DEBUG
-      fputs("<- EV: paren close\n", stderr);
-#endif
+      DB_MSG("<- EV: paren close");
       lcps = lisp_ev(lcps, __LISP_PAREN_OUT);
       break;
     case __LISP_WHITESPACE:
-#ifdef DEBUG
-      fputs("-> EV: whitespace\n", stderr);
-#endif
+      DB_MSG("-> EV: whitespace");
       lcps = lisp_whitespace(lcps);
       break;
     default:
@@ -637,9 +597,7 @@ static int parse_ioblock(char* buf, uint size) {
     }
   }
 
-#ifdef DEBUG
-  printf("vslisp: [ret = %d, paren = %d]\n", ret, paren);
-#endif
+  DB_FMT("vslisp: [ret = %d, paren = %d]", ret, paren);
 
  done:
   return ret;
