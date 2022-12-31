@@ -2,33 +2,30 @@
 //         not bootstrapped
 
 #include <unistd.h>
-#include <stdlib.h>
 
 #include "debug.h"
 
 #include "vslisp.h"
-#include "pool.h"
 
-// #include "prim.h"
-
+static ulong chash            = 0;
 static uint paren             = 0;
-static uint hash_i            = 0;
 static char iobuf[IOBLOCK]    = {0};
 
-static struct lisp_hash chash = {0};
 static struct lisp_cps   lcps = {0};
 static struct lisp_sexp* head = NULL,
                        * root = NULL;
 
-struct MEMPOOL(lisp_sexp, SEXPPOOL);
-struct MEMPOOL_RET(lisp_sexp);
-//struct MEMPOOL(lisp_sym_hash, HASHPOOL);
+static struct MEMPOOL_TMPL(sexp)  sexpmp = {
+  .mem   = {0},
+  .next  = NULL,
+  .prev  = NULL,
+  .idx   = 0,
+  .total = SEXPPOOL,
+  .used  = 1,
+};
+static struct MEMPOOL_TMPL(sexp)* sexpmpp = &sexpmp;
 
-static struct MEMPOOL_TMPL(lisp_sexp)  sexpmp = {0};
-static struct MEMPOOL_TMPL(lisp_sexp)* sexpmpp = NULL;
-//static struct MEMPOOL_TMPL(lisp_sym_hash) hashmp = {0};
-
-static inline void pool_clean(struct MEMPOOL_TMPL(lisp_sexp)* pp) {
+static inline void pool_clean(struct MEMPOOL_TMPL(sexp)* pp) {
   uint pn = pp->total;
 
   for (; pp; pp = pp->next) {
@@ -38,9 +35,9 @@ static inline void pool_clean(struct MEMPOOL_TMPL(lisp_sexp)* pp) {
     }
   }
 }
-static inline struct MEMPOOL_RET_TMPL(lisp_sexp)
-pool_add_node(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
-  struct MEMPOOL_RET_TMPL(lisp_sexp) ret = {
+static inline struct MEMPOOL_RET_TMPL(sexp)
+pool_add_node(struct MEMPOOL_TMPL(sexp)* mpp) {
+  struct MEMPOOL_RET_TMPL(sexp) ret = {
     .mem   = NULL,
     .base  = mpp,
     .entry = NULL,
@@ -49,7 +46,9 @@ pool_add_node(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
 
   if (mpp->used == mpp->total) {
     if (!mpp->next) {
-      mpp->next        = malloc(sizeof(struct MEMPOOL_TMPL(lisp_sexp)));
+      // TODO: even though this has no way to get leaked,
+      //       free it when exiting `main'
+      mpp->next        = malloc(sizeof(struct MEMPOOL_TMPL(sexp)));
 
       mpp->next->idx   = (mpp->idx + 1);
       mpp->next->prev  = mpp;
@@ -68,11 +67,11 @@ pool_add_node(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
 
   return ret;
 }
-static inline struct MEMPOOL_RET_TMPL(lisp_sexp)
-pool_from_idx(struct MEMPOOL_TMPL(lisp_sexp)* mpp,
+static inline struct MEMPOOL_RET_TMPL(sexp)
+pool_from_idx(struct MEMPOOL_TMPL(sexp)* mpp,
               uint idx) {
-  struct MEMPOOL_RET_TMPL(lisp_sexp) ret = {0};
-  struct MEMPOOL_TMPL(lisp_sexp)* pp     = mpp;
+  struct MEMPOOL_RET_TMPL(sexp) ret = {0};
+  struct MEMPOOL_TMPL(sexp)* pp     = mpp;
   int diff = (idx - mpp->idx);
 
   if (diff > 0) {
@@ -95,7 +94,7 @@ pool_from_idx(struct MEMPOOL_TMPL(lisp_sexp)* mpp,
 }
 static inline struct pos_t
 lisp_sexp_node_set_pos(enum sexp_t t,
-                       struct MEMPOOL_RET_TMPL(lisp_sexp) pr,
+                       struct MEMPOOL_RET_TMPL(sexp) pr,
                        struct lisp_sexp* head) {
   struct pos_t ret      = {0};
 
@@ -116,9 +115,9 @@ lisp_sexp_node_set_pos(enum sexp_t t,
 
   return ret;
 }
-static inline struct MEMPOOL_RET_TMPL(lisp_sexp)
+static inline struct MEMPOOL_RET_TMPL(sexp)
 lisp_sexp_node_get_pos(enum sexp_t t,
-                       struct MEMPOOL_RET_TMPL(lisp_sexp) pr,
+                       struct MEMPOOL_RET_TMPL(sexp) pr,
                        struct lisp_sexp* head) {
   uint pidx = 0;
   uint am   = 0;
@@ -141,7 +140,7 @@ lisp_sexp_node_get_pos(enum sexp_t t,
 
   return pr;
 }
-static void lisp_sexp_node_add(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
+static void lisp_sexp_node_add(struct MEMPOOL_TMPL(sexp)** mpp) {
   DB_MSG("-> lisp_sexp_node_add()");
 
   if (!head) {
@@ -152,7 +151,7 @@ static void lisp_sexp_node_add(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
     return;
   }
 
-  struct MEMPOOL_RET_TMPL(lisp_sexp) pr
+  struct MEMPOOL_RET_TMPL(sexp) pr
                              = pool_add_node(*mpp);
   struct lisp_sexp* new_head = pr.entry;
 
@@ -214,7 +213,7 @@ static void lisp_sexp_node_add(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
     /** get new memory for `new_head'
           - possible chance of changing the thread of `mpp'
      */
-    struct MEMPOOL_RET_TMPL(lisp_sexp) ppr = pr;
+    struct MEMPOOL_RET_TMPL(sexp) ppr = pr;
     pr        = pool_add_node(*mpp);
     new_head  = pr.entry;
 
@@ -248,7 +247,7 @@ static void lisp_sexp_node_add(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
     head = new_head;
   }
 }
-static void lisp_sexp_sym(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
+static void lisp_sexp_sym(struct MEMPOOL_TMPL(sexp)** mpp) {
   if (!head) {
     DB_MSG("-> lisp_do_sym()");
     goto done;
@@ -290,7 +289,7 @@ static void lisp_sexp_sym(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
           - possible chance of changing the thread of `mpp'
      */
     struct lisp_sexp old_head   = *head;
-    struct MEMPOOL_RET_TMPL(lisp_sexp) pr
+    struct MEMPOOL_RET_TMPL(sexp) pr
                                 = pool_add_node(*mpp);
     struct lisp_sexp* lexp_head = pr.entry;
 
@@ -330,13 +329,9 @@ static void lisp_sexp_sym(struct MEMPOOL_TMPL(lisp_sexp)** mpp) {
   }
 
 done:
-  hash_i     = 0;
-  chash.len  = 0;
-
-  chash.body.hash = 0L;
-  *(ulong*) chash.body.cmask = chash.body.hash;
+  chash = 0L;
 }
-static void lisp_do_sexp(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
+static void lisp_do_sexp(struct MEMPOOL_TMPL(sexp)* mpp) {
   /**
      algorithm
      ---------
@@ -363,7 +358,7 @@ static void lisp_do_sexp(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
      if hit root from stage 3b stop the algorithm.
    */
 
-  struct MEMPOOL_RET_TMPL(lisp_sexp) pp;
+  struct MEMPOOL_RET_TMPL(sexp) pp;
   struct lisp_sexp* _head = head;
 
   pp.base  = mpp;
@@ -388,7 +383,7 @@ stage1:
     /** left child of common root is SYM:
           stage 3a
     */
-    DB_FMT("  -> (std) left = %lx", head->left.sym.body.hash);
+    DB_FMT("  -> (std) left = %lu", head->left.sym);
 
     /** stage3a: */
     if (t & RIGHT_CHILD) {
@@ -401,17 +396,15 @@ stage1:
     /** right child of common root is SYM:
           stage3b
     */
-    DB_FMT("  -> (rebound-left) right = %lx", head->right.sym.body.hash);
+    DB_FMT("  -> (rebound-left) right = %lu", head->right.sym);
   }
 
 stage3b:
   if (head == root) {
-#ifdef DEBUG
     if (t == (__SEXP_RIGHT_SYM | __SEXP_RIGHT_EMPTY)) {
-      fprintf(stderr, "  -> (rebound-right) right = %lx\n", head->right.sym.body.hash);
+      DB_FMT("  -> (rebound-right) right = %lu", head->right.sym);
     }
-    fputs("  -> HIT ROOT\n", stderr);
-#endif
+    DB_MSG("  -> HIT ROOT");
     goto done;
   }
 
@@ -435,7 +428,7 @@ stage3b:
     goto stage1;
   }
   else {
-    DB_FMT("  -> (rebound-left) right = %lx", head->right.sym.body.hash);
+    DB_FMT("  -> (rebound-left) right = %lu", head->right.sym);
     goto stage3b;
   }
 
@@ -443,13 +436,13 @@ done:
   pool_clean(mpp);
   head = NULL;
 }
-static inline void lisp_sexp_end(struct MEMPOOL_TMPL(lisp_sexp)* mpp) {
+static inline void lisp_sexp_end(struct MEMPOOL_TMPL(sexp)* mpp) {
   // NOTE: `head' will always be on either an orphan EXP or a paren EXP,
   //       and probably on a different section than `root'
 
   DB_MSG("<- lisp_sexp_end()");
 
-  struct MEMPOOL_RET_TMPL(lisp_sexp) pp = {0};
+  struct MEMPOOL_RET_TMPL(sexp) pp = {0};
   struct lisp_sexp* phead = head;
 
   pp.mem   =
@@ -479,18 +472,6 @@ again:
   }
 
   head = phead;
-}
-struct lisp_hash_body do_chash(struct lisp_hash_body body,
-                                             int i, char c) {
-  ulong hash_byt = ((c + i) % 0x100);
-
-  i         %= 8;
-  hash_byt <<= (i*8);
-
-  body.hash     |= hash_byt;
-  body.cmask[i]  = c;
-
-  return body;
 }
 static inline struct lisp_cps lisp_ev(struct lisp_cps pstat,
                                       enum lisp_pev sev) {
@@ -545,6 +526,7 @@ static inline struct lisp_cps lisp_stat(struct lisp_cps pstat,
 }
 static inline struct lisp_cps lisp_whitespace(struct lisp_cps pstat) {
   if (pstat.master & __LISP_SYMBOL_IN) {
+    chash = done_chash(chash);
     pstat = lisp_ev(pstat, __LISP_SYMBOL_OUT);
   }
 
@@ -558,11 +540,9 @@ static inline struct lisp_cps lisp_csym(struct lisp_cps pstat, char c) {
     goto done;
   }
 
-  ++chash.len;
-  chash.body = do_chash(chash.body, hash_i, c);
-  ++hash_i;
+  chash = do_chash(chash, c);
 
-  DB_FMT("vslisp: character (%c) (0x%lx)", c, chash.body.hash);
+  DB_FMT("vslisp: character (%c) (0x%lu)", c, chash);
 
  done:
   return pstat;
@@ -597,9 +577,8 @@ static int parse_ioblock(char* buf, uint size) {
     }
   }
 
+done:
   DB_FMT("vslisp: [ret = %d, paren = %d]", ret, paren);
-
- done:
   return ret;
 }
 static int parse_bytstream(int fd) {
@@ -628,17 +607,12 @@ static int parse_bytstream(int fd) {
 }
 
 int main(void) {
-  sexpmp.total      = SEXPPOOL;
-  sexpmp.used       = 1;
-  sexpmp.prev       = NULL;
-  sexpmp.next       = NULL;
+  if (frontend) {
+    frontend();
+  }
 
-  sexpmpp           = &sexpmp;
-
-  head              = NULL;
-  root              = sexpmpp->mem;
-
-  root->t           = (__SEXP_SELF_ROOT | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
+  root    = sexpmpp->mem;
+  root->t = (__SEXP_SELF_ROOT | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
 
   int ret = parse_bytstream(STDIN_FILENO);
 

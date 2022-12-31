@@ -1,5 +1,5 @@
-#ifndef LOCK_VSL_PRE
-#  define LOCK_VSL_PRE
+#ifndef LOCK_PREVSL
+#  define LOCK_PREVSL
 
 
 

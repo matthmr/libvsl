@@ -1,16 +1,15 @@
 #ifndef LOCK_VSLISP
 #  define LOCK_VSLISP
 
-#  ifndef false
-#    define false 0x0
+#  include "symtab.h"
+
+#  ifndef IOBLOCK
+#    define IOBLOCK (4096)
 #  endif
 
-#  ifndef true
-#    define true  0x1
+#  ifndef SEXPPOOL
+#    define SEXPPOOL (64)
 #  endif
-
-#  define IOBLOCK (4096)
-#  define SEXPPOOL (64)
 
 #  define __LISP_WHITESPACE \
          0x00: \
@@ -26,11 +25,7 @@
   x, ((sizeof(x)/sizeof(char)) - 1)
 
 #  define __LISP_ALLOWED_IN_NAME(x) \
-  (((x) > 0x20) || (x) != 0x7f)
-
-typedef unsigned int uint;
-typedef unsigned long ulong;
-typedef unsigned char bool;
+  (((x) > 0x20) && (x) != 0x7f)
 
 enum lisp_c {
   __LISP_PAREN_OPEN = '(',
@@ -50,16 +45,6 @@ enum lisp_pstat {
 struct lisp_cps {
   enum lisp_pstat master;
   int             slave;
-};
-
-struct lisp_hash_body {
-  ulong hash;
-  char  cmask[sizeof(ulong)];
-};
-
-struct lisp_hash {
-  uint len;
-  struct lisp_hash_body body;
 };
 
 enum sexp_t {
@@ -93,8 +78,8 @@ struct pos_t {
 };
 
 union node_t {
-  struct lisp_hash sym;
-  struct pos_t     pos;
+  ulong        sym;
+  struct pos_t pos;
 };
 
 struct lisp_sexp {
@@ -118,6 +103,11 @@ struct lisp_sexp {
                                        b   c
                    */
 };
+
+struct MEMPOOL(struct lisp_sexp, sexp, SEXPPOOL);
+struct MEMPOOL_RET(struct lisp_sexp, sexp);
+
+void (*frontend)(void);
 
 #endif
 

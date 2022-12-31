@@ -1,21 +1,44 @@
 #ifndef LOCK_SYMTAB
 #  define LOCK_SYMTAB
 
-typedef unsigned int uint;
-typedef unsigned long ulong;
-typedef unsigned char bool;
+#  include "pool.h"
 
-struct lisp_hash_body {
-  ulong hash;
-  char  cmask[sizeof(ulong)];
+#  ifndef SYMPOOL
+#    define SYMPOOL (10)
+#  endif
+
+#  ifndef SYMTAB
+#    define SYMTAB  (53)
+#  endif
+
+union lisp_symtab_sym {
+  void* func;
+  void* sym;
 };
 
-struct lisp_hash {
-  uint len;
-  struct lisp_hash_body body;
+enum  lisp_symtab_typ {
+  __LISP_FUN,
+  __LISP_SYM,
 };
 
-struct lisp_hash_body do_chash(struct lisp_hash_body body,
-                               int i, char c);
+struct lisp_symtab_raw {
+  const char* str;
+  ulong       hash;
+
+  enum  lisp_symtab_typ typ;
+  union lisp_symtab_sym sym;
+};
+
+struct lisp_symtab {
+  char c;
+};
+
+extern const struct lisp_symtab_raw*
+  symtab_raw;
+extern struct MEMPOOL_TMPL(symtab)*
+  symtab;
+
+ulong do_chash(ulong chash, char c);
+ulong done_chash(ulong chash);
 
 #endif

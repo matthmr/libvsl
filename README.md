@@ -6,11 +6,13 @@ A very small implementation of lisp, nothing too fancy.
 
 Run `make libvsl` to compile the project. `make` variables are:
 
-- `CC` - the C compiler
-- `CFLAGS` - `CC` major flags
-- `CFLAGSADD` - `CC` minor flags
+- `CC` - the C compiler (`cc`)
+- `CFLAGS` - `CC` major flags (`-Wall`)
+- `CFLAGSADD` - `CC` minor flags ()
+- `AR` - the ELF archiver (`ar`)
 
 ## Usage in other projects
+<!-- TODO: this is wrong, and/or incomplete -->
 
 I started this as a sanity check to see if I was able to implement a full
 functioning static lisp for `GPLD`, but I realized that this may be more
@@ -46,27 +48,9 @@ file named `ex-func.c`):
 (greet (nil) (nil) lisp_function_greet)
 ```
 
-Then run `prevsl < <input-pvsl-file> > <output-c-file>`.
+Then run `make lisp PRE=<pvsl-file>`.
 
-For example:
-
-``` shell
-prevsl < ex.pvsl > ex.c
-```
-
-This will transpile to C, making as many optimizations as it can to the
-resulting symbol table.
-
-To create the executable that reads *LISP* lists, compile the resulting file
-against `libvsl` and the function source and you'll have a *LISP* by the end.
-
-For example:
-
-``` shell
-cc ex.c ex-func.c -L. -lvsl -o ex-lisp
-```
-
-Then run it:
+Try it out:
 
 ``` shell
 $ ex-lisp
