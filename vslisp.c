@@ -3,9 +3,8 @@
 
 #include <unistd.h>
 
-#include "debug.h"
-
 #include "vslisp.h"
+#include "debug.h"
 
 static ulong chash            = 0;
 static uint paren             = 0;
@@ -15,17 +14,7 @@ static struct lisp_cps   lcps = {0};
 static struct lisp_sexp* head = NULL,
                        * root = NULL;
 
-static struct MEMPOOL_TMPL(sexp)  sexpmp = {
-  .mem   = {0},
-  .next  = NULL,
-  .prev  = NULL,
-  .idx   = 0,
-  .total = SEXPPOOL,
-  .used  = 1,
-};
-static struct MEMPOOL_TMPL(sexp)* sexpmpp = &sexpmp;
-
-static inline void pool_clean(struct MEMPOOL_TMPL(sexp)* pp) {
+static inline void pool_clean(POOL_T* pp) {
   uint pn = pp->total;
 
   for (; pp; pp = pp->next) {
@@ -35,66 +24,9 @@ static inline void pool_clean(struct MEMPOOL_TMPL(sexp)* pp) {
     }
   }
 }
-static inline struct MEMPOOL_RET_TMPL(sexp)
-pool_add_node(struct MEMPOOL_TMPL(sexp)* mpp) {
-  struct MEMPOOL_RET_TMPL(sexp) ret = {
-    .mem   = NULL,
-    .base  = mpp,
-    .entry = NULL,
-    .same  = true,
-  };
-
-  if (mpp->used == mpp->total) {
-    if (!mpp->next) {
-      // TODO: even though this has no way to get leaked,
-      //       free it when exiting `main'
-      mpp->next        = malloc(sizeof(struct MEMPOOL_TMPL(sexp)));
-
-      mpp->next->idx   = (mpp->idx + 1);
-      mpp->next->prev  = mpp;
-      mpp->next->next  = NULL;
-    }
-
-    ret.same          = false;
-    mpp->next->total  = mpp->total;
-    mpp->next->used   = 0;
-    mpp               = mpp->next;
-  }
-
-  ret.mem   = mpp;
-  ret.entry = (mpp->mem + mpp->used);
-  ++mpp->used;
-
-  return ret;
-}
-static inline struct MEMPOOL_RET_TMPL(sexp)
-pool_from_idx(struct MEMPOOL_TMPL(sexp)* mpp,
-              uint idx) {
-  struct MEMPOOL_RET_TMPL(sexp) ret = {0};
-  struct MEMPOOL_TMPL(sexp)* pp     = mpp;
-  int diff = (idx - mpp->idx);
-
-  if (diff > 0) {
-    for (; diff; --diff) {
-      pp = pp->next;
-    }
-  }
-  else if (diff < 0) {
-    for (diff = -diff; diff; --diff) {
-      pp = pp->prev;
-    }
-  }
-
-  ret.entry  =
-    (ret.mem = pp)->mem;
-  ret.base   = mpp;
-  ret.same   = (bool) (pp == mpp);
-
-  return ret;
-}
 static inline struct pos_t
 lisp_sexp_node_set_pos(enum sexp_t t,
-                       struct MEMPOOL_RET_TMPL(sexp) pr,
+                       POOL_RET_T pr,
                        struct lisp_sexp* head) {
   struct pos_t ret      = {0};
 
@@ -115,9 +47,9 @@ lisp_sexp_node_set_pos(enum sexp_t t,
 
   return ret;
 }
-static inline struct MEMPOOL_RET_TMPL(sexp)
+static inline POOL_RET_T
 lisp_sexp_node_get_pos(enum sexp_t t,
-                       struct MEMPOOL_RET_TMPL(sexp) pr,
+                       POOL_RET_T pr,
                        struct lisp_sexp* head) {
   uint pidx = 0;
   uint am   = 0;
@@ -140,7 +72,7 @@ lisp_sexp_node_get_pos(enum sexp_t t,
 
   return pr;
 }
-static void lisp_sexp_node_add(struct MEMPOOL_TMPL(sexp)** mpp) {
+static void lisp_sexp_node_add(POOL_T** mpp) {
   DB_MSG("-> lisp_sexp_node_add()");
 
   if (!head) {
@@ -151,8 +83,7 @@ static void lisp_sexp_node_add(struct MEMPOOL_TMPL(sexp)** mpp) {
     return;
   }
 
-  struct MEMPOOL_RET_TMPL(sexp) pr
-                             = pool_add_node(*mpp);
+  POOL_RET_T pr              = pool_add_node(*mpp);
   struct lisp_sexp* new_head = pr.entry;
 
   if (!pr.same) {
@@ -213,7 +144,8 @@ static void lisp_sexp_node_add(struct MEMPOOL_TMPL(sexp)** mpp) {
     /** get new memory for `new_head'
           - possible chance of changing the thread of `mpp'
      */
-    struct MEMPOOL_RET_TMPL(sexp) ppr = pr;
+    POOL_RET_T ppr
+              = pr;
     pr        = pool_add_node(*mpp);
     new_head  = pr.entry;
 
@@ -247,7 +179,7 @@ static void lisp_sexp_node_add(struct MEMPOOL_TMPL(sexp)** mpp) {
     head = new_head;
   }
 }
-static void lisp_sexp_sym(struct MEMPOOL_TMPL(sexp)** mpp) {
+static void lisp_sexp_sym(POOL_T** mpp) {
   if (!head) {
     DB_MSG("-> lisp_do_sym()");
     goto done;
@@ -289,8 +221,7 @@ static void lisp_sexp_sym(struct MEMPOOL_TMPL(sexp)** mpp) {
           - possible chance of changing the thread of `mpp'
      */
     struct lisp_sexp old_head   = *head;
-    struct MEMPOOL_RET_TMPL(sexp) pr
-                                = pool_add_node(*mpp);
+    POOL_RET_T pr               = pool_add_node(*mpp);
     struct lisp_sexp* lexp_head = pr.entry;
 
     if (!pr.same) {
@@ -331,7 +262,7 @@ static void lisp_sexp_sym(struct MEMPOOL_TMPL(sexp)** mpp) {
 done:
   chash = 0L;
 }
-static void lisp_do_sexp(struct MEMPOOL_TMPL(sexp)* mpp) {
+static void lisp_do_sexp(POOL_T* mpp) {
   /**
      algorithm
      ---------
@@ -358,7 +289,7 @@ static void lisp_do_sexp(struct MEMPOOL_TMPL(sexp)* mpp) {
      if hit root from stage 3b stop the algorithm.
    */
 
-  struct MEMPOOL_RET_TMPL(sexp) pp;
+  POOL_RET_T pp;
   struct lisp_sexp* _head = head;
 
   pp.base  = mpp;
@@ -436,13 +367,13 @@ done:
   pool_clean(mpp);
   head = NULL;
 }
-static inline void lisp_sexp_end(struct MEMPOOL_TMPL(sexp)* mpp) {
+static inline void lisp_sexp_end(POOL_T* mpp) {
   // NOTE: `head' will always be on either an orphan EXP or a paren EXP,
   //       and probably on a different section than `root'
 
   DB_MSG("<- lisp_sexp_end()");
 
-  struct MEMPOOL_RET_TMPL(sexp) pp = {0};
+  POOL_RET_T pp = {0};
   struct lisp_sexp* phead = head;
 
   pp.mem   =
@@ -479,7 +410,7 @@ static inline struct lisp_cps lisp_ev(struct lisp_cps pstat,
     if (pstat.master & __LISP_SYMBOL_IN) {
       DB_MSG("<- EV: symbol out");
       pstat.master &= ~__LISP_SYMBOL_IN;
-      lisp_sexp_sym(&sexpmpp);
+      lisp_sexp_sym(&POOLP);
     }
     else {
       pstat.slave = 1;
@@ -496,9 +427,9 @@ static inline struct lisp_cps lisp_ev(struct lisp_cps pstat,
     if (paren) {
       pstat.master &= ~__LISP_PAREN_IN;
       --paren;
-      lisp_sexp_end(sexpmpp);
+      lisp_sexp_end(POOLP);
       if (!paren) {
-        lisp_do_sexp(sexpmpp);
+        lisp_do_sexp(POOLP);
       }
     }
     else {
@@ -516,7 +447,7 @@ static inline struct lisp_cps lisp_stat(struct lisp_cps pstat,
     if (pstat.master & __LISP_SYMBOL_IN) {
       pstat = lisp_ev(pstat, __LISP_SYMBOL_OUT);
     }
-    lisp_sexp_node_add(&sexpmpp);
+    lisp_sexp_node_add(&POOLP);
     ++paren;
   }
 
@@ -611,7 +542,7 @@ int main(void) {
     frontend();
   }
 
-  root    = sexpmpp->mem;
+  root    = POOLP->mem;
   root->t = (__SEXP_SELF_ROOT | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
 
   int ret = parse_bytstream(STDIN_FILENO);

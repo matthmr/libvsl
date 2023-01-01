@@ -1,6 +1,10 @@
 #ifndef LOCK_VSLISP
 #  define LOCK_VSLISP
 
+// don't use `symtab.h's definitions for their pool
+#  define LOCK_POOL
+#  define LOCK_SYMTAB_INTERNALS
+
 #  include "symtab.h"
 
 #  ifndef IOBLOCK
@@ -104,8 +108,14 @@ struct lisp_sexp {
                    */
 };
 
-struct MEMPOOL(struct lisp_sexp, sexp, SEXPPOOL);
-struct MEMPOOL_RET(struct lisp_sexp, sexp);
+#  define POOL_ENTRY_T struct lisp_sexp
+#  define POOL_AM      SEXPPOOL
+
+#  ifdef LOCK_POOL
+#    undef LOCK_POOL
+#  endif
+
+#  include "pool.h"
 
 void (*frontend)(void);
 
