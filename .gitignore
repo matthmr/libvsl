@@ -7,7 +7,9 @@ vslisp
 # Pre
 prevsl
 lisp.c
-lisp
+lisp*
 
 # Dev
 dev/
+TAGS
+tags

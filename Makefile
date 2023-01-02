@@ -17,6 +17,7 @@ CFLAGS?=-Wall
 CFLAGSADD?=
 
 PRE?=
+PREDEF:=lisp.c
 
 $(OBJECTS):
 	@echo "CC " $@
@@ -28,21 +29,25 @@ $(TARGETS):
 
 $(LIBRARIES):
 	@echo "AR" $@
-	@$(AR) crv $@ $?
+	@$(AR) crUv $@ $?
 
 prevsl:
 	@echo "CC" $@
-	@(CC) -c $(CFLAGS) $(CFLAGSADD) prevsl.c -o $@ -L. -lvsl
+	@$(CC) $(CFLAGS) $(CFLAGSADD) -L. -lvsl $< -o $@
 
-lisp: libvsl.a prevsl $(PRE)
+lisp: prevsl $(PRE)
 	@echo "PREVSL" $(PRE)
-	@./prevsl < $(PRE) > lisp.c
+	@./prevsl < $(PRE) > $(PREDEF)
 	@echo "CC lisp"
-	@$(CC) -c $(CFLAGS) $(CFLAGSADD) lisp.c -o lisp -L. -lvsl
+	@$(CC) -c $(CFLAGS) $(CFLAGSADD) -o lisp -L. -lvsl $(PREDEF)
+
+tags:
+	@echo "ETAGS TAGS"
+	@find -type f -name '*.[ch]' | xargs etags -o TAGS
 
 clean:
-	@echo "RM lisp.c " $(OBJECTS) $(TARGETS) $(LIBRARIES)
-	@rm -rfv lisp.c $(OBJECTS) $(TARGETS) $(LIBRARIES)
+	@echo "RM TAGS" $(PREDEF) $(OBJECTS) $(TARGETS) $(LIBRARIES)
+	@rm -rfv TAGS $(PREDEF) $(OBJECTS) $(TARGETS) $(LIBRARIES)
 
 help:
 	@echo -e "\
@@ -51,4 +56,4 @@ make help: display this error message \n\
 make lisp PRE=...: makes the lisp, with \`PRE' as the pvsl file \n\
 make clean: clean targets"
 
-.PHONY: clean help lisp $(TARGETS)
+.PHONY: tags clean help lisp $(TARGETS)
