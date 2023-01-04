@@ -58,6 +58,10 @@
 
 MEMPOOL(POOL_ENTRY_T, POOL_AM);
 MEMPOOL_RET(POOL_ENTRY_T);
+#endif
+
+#ifndef LOCK_POOL_DEF
+#  define LOCK_POOL_DEF
 
 // the first thread entry
 static POOL_T gmp = {

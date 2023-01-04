@@ -1,11 +1,12 @@
 all: libvsl.a
 
-vslisp.o: vslisp.c vslisp.h pool.h symtab.h utils.h
-symtab.o: symtab.c symtab.h utils.h
-prevsl.o: prevsl.c
-OBJECTS:=vslisp.o symtab.o prevsl.o
+vslisp.o: vslisp.c vslisp.h pool.h symtab.h utils.h sexp.h debug.h
+symtab.o: symtab.c symtab.h pool.h utils.h
+prevsl.o: prevsl.c symtab.h sexp.h pool.h utils.h
+stack.o: stack.c stack.h utils.h sexp.h symtab.h debug.h
+OBJECTS:=vslisp.o symtab.o prevsl.o stack.o
 
-libvsl.a: symtab.o vslisp.o
+libvsl.a: symtab.o vslisp.o stack.o
 LIBRARIES:=libvsl.a
 
 prevsl: prevsl.o libvsl.a
@@ -17,7 +18,8 @@ CFLAGS?=-Wall
 CFLAGSADD?=
 
 PRE?=
-PREDEF:=lisp.c
+PREDEF_SRC:=lisp.c
+PREDEF_BIN:=lisp
 
 $(OBJECTS):
 	@echo "CC " $@
@@ -37,17 +39,17 @@ prevsl:
 
 lisp: prevsl $(PRE)
 	@echo "PREVSL" $(PRE)
-	@./prevsl < $(PRE) > $(PREDEF)
+	@./prevsl < $(PRE) > $(PREDEF_SRC)
 	@echo "CC lisp"
-	@$(CC) -c $(CFLAGS) $(CFLAGSADD) -o lisp -L. -lvsl $(PREDEF)
+	@$(CC) -c $(CFLAGS) $(CFLAGSADD) -o $(PREDEF_BIN) -L. -lvsl $(PREDEF_SRC)
 
 tags:
 	@echo "ETAGS TAGS"
 	@find -type f -name '*.[ch]' | xargs etags -o TAGS
 
 clean:
-	@echo "RM TAGS" $(PREDEF) $(OBJECTS) $(TARGETS) $(LIBRARIES)
-	@rm -rfv TAGS $(PREDEF) $(OBJECTS) $(TARGETS) $(LIBRARIES)
+	@echo "RM TAGS" $(PREDEF_SRC) $(OBJECTS) $(TARGETS) $(LIBRARIES)
+	@rm -rfv TAGS $(PREDEF_SRC) $(OBJECTS) $(TARGETS) $(LIBRARIES)
 
 help:
 	@echo -e "\

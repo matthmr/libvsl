@@ -13,6 +13,13 @@
   ret = x;         \
   goto done
 
+#  define defer_func(x) \
+  goto done
+
+#  define defer_var(x, y) \
+  (x) = (y);              \
+  goto done
+
 #  define BIT(x) (1 << (x))
 #  define MSG(x) \
   x, ((sizeof(x)/sizeof(char)) - 1)
