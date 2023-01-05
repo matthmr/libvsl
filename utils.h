@@ -9,16 +9,28 @@
 #    define true  0x1
 #  endif
 
-#  define defer(x) \
-  ret = x;         \
-  goto done
-
 #  define defer_func(x) \
   goto done
 
+#  define defer(x) \
+  ret = (x);       \
+  defer_func()
+
 #  define defer_var(x, y) \
   (x) = (y);              \
-  goto done
+  defer_func()
+
+#  define maybe(x) \
+  ret = (x);       \
+  if (ret) {       \
+    defer_func();  \
+  }
+
+#  define maybe_var(x) \
+  (x) = (y);           \
+  if (x) {             \
+    defer_func();      \
+  }
 
 #  define BIT(x) (1 << (x))
 #  define MSG(x) \

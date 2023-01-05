@@ -72,9 +72,12 @@ struct clisp_symtab {
 };
 
 int  do_chash(struct lisp_symtab* chash, char c);
-int  lisp_symtab_set(struct lisp_symtab* chash);
-int  lisp_symtab_get(struct lisp_symtab* chash);
 void done_chash(void);
+
+// TODO: these are stubs
+int   lisp_symtab_set(struct lisp_symtab chash);
+int   lisp_symtab_get(struct lisp_symtab chash);
+uint  lisp_symtab_getsize(struct lisp_symtab chash);
 #endif
 
 #ifndef LOCK_SYMTAB_INTERNALS

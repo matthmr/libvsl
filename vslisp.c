@@ -4,15 +4,16 @@
 #include <unistd.h>
 
 #include "vslisp.h"
+#include "stack.h"
 #include "debug.h"
 
-static ulong chash            = 0;
-static uint paren             = 0;
-static char iobuf[IOBLOCK]    = {0};
+static uint paren               = 0;
+static char iobuf[IOBLOCK]      = {0};
 
-static struct lisp_cps   lcps = {0};
-static struct lisp_sexp* head = NULL,
-                       * root = NULL;
+static struct lisp_symtab chash = {0};
+static struct lisp_cps    lcps  = {0};
+static struct lisp_sexp*  head  = NULL,
+                       *  root  = NULL;
 
 static inline void pool_clean(POOL_T* pp) {
   uint pn = pp->total;
@@ -24,6 +25,7 @@ static inline void pool_clean(POOL_T* pp) {
     }
   }
 }
+
 static inline struct pos_t
 lisp_sexp_node_set_pos(enum sexp_t t,
                        POOL_RET_T pr,
@@ -47,6 +49,7 @@ lisp_sexp_node_set_pos(enum sexp_t t,
 
   return ret;
 }
+
 static inline POOL_RET_T
 lisp_sexp_node_get_pos(enum sexp_t t,
                        POOL_RET_T pr,
@@ -72,6 +75,7 @@ lisp_sexp_node_get_pos(enum sexp_t t,
 
   return pr;
 }
+
 static void lisp_sexp_node_add(POOL_T** mpp) {
   DB_MSG("-> lisp_sexp_node_add()");
 
@@ -179,8 +183,10 @@ static void lisp_sexp_node_add(POOL_T** mpp) {
     head = new_head;
   }
 }
+
 static void lisp_sexp_sym(POOL_T** mpp) {
   if (!head) {
+    // TODO: implement this
     DB_MSG("-> lisp_do_sym()");
     goto done;
   }
@@ -260,9 +266,12 @@ static void lisp_sexp_sym(POOL_T** mpp) {
   }
 
 done:
-  chash = 0L;
+  chash.sum     = 0;
+  chash.len     = 0;
+  chash.com_pos = 0;
 }
-static void lisp_do_sexp(POOL_T* mpp) {
+
+static void lisp_sexp_trans(struct lisp_stack* stack) {
   /**
      algorithm
      ---------
@@ -289,16 +298,27 @@ static void lisp_do_sexp(POOL_T* mpp) {
      if hit root from stage 3b stop the algorithm.
    */
 
+  struct lisp_sexp* _head;
+
+  POOL_T*    mpp;
   POOL_RET_T pp;
-  struct lisp_sexp* _head = head;
+
+  mpp      = stack->mpp;
 
   pp.base  = mpp;
   pp.mem   = mpp;
   pp.entry = mpp->mem;
-  head     = root;
+  head     = stack->head;
+  //head     = root;
 
   enum sexp_t t  = 0;
 
+  if (stack->ev & __STACK_POP) {
+    stack->ev   &= ~__STACK_POP;
+    goto stage3b_popped;
+  }
+
+  // TODO: stage 1 done twice *should* be an error, implement that
 stage1:
   t = head->t;
   if (t & LEFT_CHILD) {
@@ -314,7 +334,23 @@ stage1:
     /** left child of common root is SYM:
           stage 3a
     */
-    DB_FMT("  -> (std) left = %lu", head->left.sym);
+    if (!STACK_PUSHED(stack->ev)) {
+      DB_FMT("  -> (std) left = 0x%x", head->left.sym.sum);
+
+      // symbol under LEXP is just a symbol
+      if (t & __SEXP_SELF_LEXP) {
+        lisp_stack_push_var(stack, mpp, head, __STACK_PUSH_LEFT);
+      }
+      else {
+        lisp_stack_push(stack, mpp, head);
+      }
+
+      return;
+    }
+    else {
+      stack->ev &=
+        ~(__STACK_PUSH_LEFT | __STACK_PUSH_RIGHT | __STACK_PUSH_FUNC);
+    }
 
     /** stage3a: */
     if (t & RIGHT_CHILD) {
@@ -323,35 +359,56 @@ stage1:
       head = pp.entry;
       goto stage1;
     }
+    else {
+      /** right child of common root is SYM:
+            stage3b
+      */
 
-    /** right child of common root is SYM:
-          stage3b
-    */
-    DB_FMT("  -> (rebound-left) right = %lu", head->right.sym);
+      DB_FMT("  -> (rebound-left) right = 0x%x", head->right.sym.sum);
+      lisp_stack_push_var(stack, mpp, head, __STACK_PUSH_RIGHT);
+      return;
+    }
   }
 
 stage3b:
   if (head == root) {
     if (t == (__SEXP_RIGHT_SYM | __SEXP_RIGHT_EMPTY)) {
-      DB_FMT("  -> (rebound-right) right = %lu", head->right.sym);
+      DB_FMT("  -> (rebound-right) right = 0x%x", head->right.sym.sum);
     }
     DB_MSG("  -> HIT ROOT");
-    goto done;
+
+    // hit the root from the right: there are no more elements,
+    // pop for the last time
+    lisp_stack_pop(stack, mpp, head);
+    return;
   }
 
-  _head = head;
-  pp    = lisp_sexp_node_get_pos(ROOT, pp, head);
-  head  = pp.entry;
-  t     = head->t;
+  // the current head is an SEXP: pop it, then go to `stage3b_popped'
+  if (t & __SEXP_SELF_SEXP) {
+    lisp_stack_pop(stack, mpp, head);
+    return;
+  }
 
+stage3b_popped:
+  _head = head;
+
+  // go root
+  pp   = lisp_sexp_node_get_pos(ROOT, pp, head);
+  head = pp.entry;
+  t    = head->t;
+
+  // came from the right: go root again
   if (_head == lisp_sexp_node_get_pos(RIGHT_CHILD, pp, head).entry) {
     goto stage3b;
   }
 
+  // came from the left: try to go right
+  //  - can't: go root again
   if (t & RIGHT_CHILD) {
     /** right child of common root is EXP:
           stage2
     */
+
     DB_MSG("  -> (rebound-right) right = exp");
     /** stage 2: */
     pp   = lisp_sexp_node_get_pos(RIGHT_CHILD, pp, head);
@@ -359,15 +416,14 @@ stage3b:
     goto stage1;
   }
   else {
-    DB_FMT("  -> (rebound-left) right = %lu", head->right.sym);
-    goto stage3b;
+    DB_FMT("  -> (rebound-left) right = 0x%x", head->right.sym.sum);
+    lisp_stack_push_var(stack, mpp, head, __STACK_PUSH_RIGHT);
+    return;
+    //goto stage3b;
   }
-
-done:
-  pool_clean(mpp);
-  head = NULL;
 }
-static inline void lisp_sexp_end(POOL_T* mpp) {
+
+static void lisp_sexp_end(POOL_T* mpp) {
   // NOTE: `head' will always be on either an orphan EXP or a paren EXP,
   //       and probably on a different section than `root'
 
@@ -404,8 +460,33 @@ again:
 
   head = phead;
 }
-static inline struct lisp_cps lisp_ev(struct lisp_cps pstat,
-                                      enum lisp_pev sev) {
+
+static int lisp_do_sexp(POOL_T* mpp) {
+  int ret = 0;
+
+  struct lisp_stack stack = {
+    .mpp        = mpp,
+    .head       = root,
+    .sexp_trans = &lisp_sexp_trans,
+  };
+
+  lisp_sexp_trans(&stack);
+
+  if (stack.fun) {
+    maybe(lisp_stack_frame(&stack));
+  }
+  else {
+    defer(1);
+  }
+
+done:
+  pool_clean(mpp);
+  head = NULL;
+
+  return ret;
+}
+
+static struct lisp_cps lisp_ev(struct lisp_cps pstat, enum lisp_pev sev) {
   if (sev & __LISP_SYMBOL_OUT) {
     if (pstat.master & __LISP_SYMBOL_IN) {
       DB_MSG("<- EV: symbol out");
@@ -413,8 +494,7 @@ static inline struct lisp_cps lisp_ev(struct lisp_cps pstat,
       lisp_sexp_sym(&POOLP);
     }
     else {
-      pstat.slave = 1;
-      goto done;
+      defer_var(pstat.slave, 1);
     }
   }
   if (sev & __LISP_PAREN_OUT) {
@@ -428,21 +508,23 @@ static inline struct lisp_cps lisp_ev(struct lisp_cps pstat,
       pstat.master &= ~__LISP_PAREN_IN;
       --paren;
       lisp_sexp_end(POOLP);
-      if (!paren) {
-        lisp_do_sexp(POOLP);
-      }
     }
     else {
-      pstat.slave = 1;
-      goto done;
+      defer_var(pstat.slave, 1);
+    }
+
+    // out of parens: start executing
+    if (!paren) {
+      pstat.slave = lisp_do_sexp(&POOL);
     }
   }
 
  done:
   return pstat;
 }
-static inline struct lisp_cps lisp_stat(struct lisp_cps pstat,
-                                        enum lisp_pstat sstat) {
+
+static inline struct lisp_cps
+lisp_stat(struct lisp_cps pstat, enum lisp_pstat sstat) {
   if (sstat & __LISP_PAREN_IN) {
     if (pstat.master & __LISP_SYMBOL_IN) {
       pstat = lisp_ev(pstat, __LISP_SYMBOL_OUT);
@@ -455,29 +537,31 @@ static inline struct lisp_cps lisp_stat(struct lisp_cps pstat,
 
   return pstat;
 }
+
 static inline struct lisp_cps lisp_whitespace(struct lisp_cps pstat) {
   if (pstat.master & __LISP_SYMBOL_IN) {
-    chash = done_chash(chash);
+    done_chash();
     pstat = lisp_ev(pstat, __LISP_SYMBOL_OUT);
   }
 
   return pstat;
 }
+
 static inline struct lisp_cps lisp_csym(struct lisp_cps pstat, char c) {
   pstat.master |= __LISP_SYMBOL_IN;
 
   if (!__LISP_ALLOWED_IN_NAME(c)) {
     pstat.slave = 1;
-    goto done;
+  }
+  else {
+    pstat.slave = do_chash(&chash, c);
   }
 
-  chash = do_chash(chash, c);
+  DB_FMT("vslisp: character (%c) (0x%x)", c, chash.sum);
 
-  DB_FMT("vslisp: character (%c) (0x%lu)", c, chash);
-
- done:
   return pstat;
 }
+
 static int parse_ioblock(char* buf, uint size) {
   int ret = 0;
 
@@ -503,8 +587,7 @@ static int parse_ioblock(char* buf, uint size) {
     }
 
     if (lcps.slave) {
-      ret = 1;
-      goto done;
+      defer(1);
     }
   }
 
@@ -512,6 +595,7 @@ done:
   DB_FMT("vslisp: [ret = %d, paren = %d]", ret, paren);
   return ret;
 }
+
 static int parse_bytstream(int fd) {
   int ret = 0;
 
@@ -519,38 +603,38 @@ static int parse_bytstream(int fd) {
 
   do {
     r = read(fd, iobuf, IOBLOCK);
-    int s = parse_ioblock(iobuf, r);
-    if (s) {
-      ret = s;
-      goto done;
-    }
+    maybe(parse_ioblock(iobuf, r));
   } while (r == IOBLOCK);
 
- done:
   if (paren) {
-    ret = 1;
+    defer(1);
   }
   else if (lcps.master) {
     lcps = lisp_whitespace(lcps);
   }
 
+done:
   return ret;
 }
 
 int main(void) {
+  int ret = 0;
+
   if (frontend) {
-    frontend();
+    maybe(frontend());
   }
 
   root    = POOLP->mem;
   root->t = (__SEXP_SELF_ROOT | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
 
-  int ret = parse_bytstream(STDIN_FILENO);
+  ret = parse_bytstream(STDIN_FILENO);
 
   if (ret) {
     write(STDERR_FILENO,
           MSG("[ !! ] vslisp: error while parsing file\n"));
+    defer(1);
   }
 
+done:
   return ret;
 }
