@@ -1,12 +1,14 @@
 all: libvsl.a
 
-vslisp.o: vslisp.c vslisp.h pool.h symtab.h utils.h sexp.h debug.h
-symtab.o: symtab.c symtab.h pool.h utils.h
-prevsl.o: prevsl.c symtab.h sexp.h pool.h utils.h
+libvsl.o: libvsl.c pool.h symtab.h utils.h sexp.h debug.h
+symtab.o: symtab.c symtab.h pool.h utils.h debug.h
+prevsl.o: prevsl.c symtab.h sexp.h pool.h utils.h debug.h
 stack.o: stack.c stack.h utils.h sexp.h symtab.h debug.h
-OBJECTS:=vslisp.o symtab.o prevsl.o stack.o
+sexp.o: sexp.c sexp.h symtab.h utils.h debug.h
+lex.o: lex.c lex.h utils.h debug.h
+OBJECTS:=libvsl.o symtab.o prevsl.o stack.o sexp.o lex.o
 
-libvsl.a: symtab.o vslisp.o stack.o
+libvsl.a: libvsl.o symtab.o stack.o sexp.o lex.o
 LIBRARIES:=libvsl.a
 
 prevsl: prevsl.o libvsl.a

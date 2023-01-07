@@ -1,19 +1,8 @@
-// vslisp: a very simple lisp implementation;
-//         not bootstrapped
-
-#include <unistd.h>
-
-#include "vslisp.h"
-#include "stack.h"
 #include "debug.h"
+#include "stack.h"
 
-static uint paren               = 0;
-static char iobuf[IOBLOCK]      = {0};
-
-static struct lisp_symtab chash = {0};
-static struct lisp_cps    lcps  = {0};
-static struct lisp_sexp*  head  = NULL,
-                       *  root  = NULL;
+static struct lisp_sexp*  head  = NULL;
+struct lisp_sexp* root          = NULL;
 
 static inline void pool_clean(POOL_T* pp) {
   uint pn = pp->total;
@@ -24,11 +13,12 @@ static inline void pool_clean(POOL_T* pp) {
       pp->mem[i].t = 0;
     }
   }
+
+  head = NULL;
 }
 
-static inline struct pos_t
-lisp_sexp_node_set_pos(enum sexp_t t,
-                       POOL_RET_T pr,
+static struct pos_t
+lisp_sexp_node_set_pos(enum sexp_t t, POOL_RET_T pr,
                        struct lisp_sexp* head) {
   struct pos_t ret      = {0};
 
@@ -50,9 +40,8 @@ lisp_sexp_node_set_pos(enum sexp_t t,
   return ret;
 }
 
-static inline POOL_RET_T
-lisp_sexp_node_get_pos(enum sexp_t t,
-                       POOL_RET_T pr,
+static POOL_RET_T
+lisp_sexp_node_get_pos(enum sexp_t t, POOL_RET_T pr,
                        struct lisp_sexp* head) {
   uint pidx = 0;
   uint am   = 0;
@@ -114,7 +103,8 @@ static void lisp_sexp_node_add(POOL_T** mpp) {
         ?   . [new_head]
      */
     new_head->root   = lisp_sexp_node_set_pos(ROOT, pr, head);
-    new_head->t     = (__SEXP_SELF_SEXP | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
+    new_head->t      =
+      (__SEXP_SELF_SEXP | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
     head->right.pos  = lisp_sexp_node_set_pos(CHILD, pr, new_head);
     head->t         &= ~__SEXP_RIGHT_EMPTY;
     head->t         |= __SEXP_RIGHT_SEXP;
@@ -236,7 +226,8 @@ static void lisp_sexp_sym(POOL_T** mpp) {
 
     /** set type and offset of `lexp_head'
      */
-    lexp_head->t    = (SWAP_RL(old_head.t) | __SEXP_RIGHT_SYM | __SEXP_SELF_LEXP);
+    lexp_head->t    =
+      (SWAP_RL(old_head.t) | __SEXP_RIGHT_SYM | __SEXP_SELF_LEXP);
     lexp_head->root = lisp_sexp_node_set_pos(ROOT, pr, head);
     lexp_head->right.sym = chash;
 
@@ -271,7 +262,8 @@ done:
   chash.com_pos = 0;
 }
 
-static void lisp_sexp_trans(struct lisp_stack* stack) {
+static void
+lisp_sexp_trans(struct lisp_stack* stack) {
   /**
      algorithm
      ---------
@@ -423,10 +415,8 @@ stage3b_popped:
   }
 }
 
-static void lisp_sexp_end(POOL_T* mpp) {
-  // NOTE: `head' will always be on either an orphan EXP or a paren EXP,
-  //       and probably on a different section than `root'
-
+static void
+lisp_sexp_end(POOL_T* mpp, struct lisp_sexp* head) {
   DB_MSG("<- lisp_sexp_end()");
 
   POOL_RET_T pp = {0};
@@ -464,10 +454,12 @@ again:
 static int lisp_do_sexp(POOL_T* mpp) {
   int ret = 0;
 
-  struct lisp_stack stack = {
-    .mpp        = mpp,
-    .head       = root,
-    .sexp_trans = &lisp_sexp_trans,
+  struct lisp_stack stack;
+
+  stack.typ.sexp = (struct lisp_sexp_stack) {
+    .mpp  = mpp,
+    .head = root,
+    .cb   = &lisp_sexp_trans,
   };
 
   lisp_sexp_trans(&stack);
@@ -479,162 +471,5 @@ static int lisp_do_sexp(POOL_T* mpp) {
     defer(1);
   }
 
-done:
-  pool_clean(mpp);
-  head = NULL;
-
-  return ret;
-}
-
-static struct lisp_cps lisp_ev(struct lisp_cps pstat, enum lisp_pev sev) {
-  if (sev & __LISP_SYMBOL_OUT) {
-    if (pstat.master & __LISP_SYMBOL_IN) {
-      DB_MSG("<- EV: symbol out");
-      pstat.master &= ~__LISP_SYMBOL_IN;
-      lisp_sexp_sym(&POOLP);
-    }
-    else {
-      defer_var(pstat.slave, 1);
-    }
-  }
-  if (sev & __LISP_PAREN_OUT) {
-    if (pstat.master & __LISP_SYMBOL_IN) {
-      pstat = lisp_ev(pstat, __LISP_SYMBOL_OUT);
-    }
-
-    DB_MSG("<- EV: paren out");
-
-    if (paren) {
-      pstat.master &= ~__LISP_PAREN_IN;
-      --paren;
-      lisp_sexp_end(POOLP);
-    }
-    else {
-      defer_var(pstat.slave, 1);
-    }
-
-    // out of parens: start executing
-    if (!paren) {
-      pstat.slave = lisp_do_sexp(&POOL);
-    }
-  }
-
- done:
-  return pstat;
-}
-
-static inline struct lisp_cps
-lisp_stat(struct lisp_cps pstat, enum lisp_pstat sstat) {
-  if (sstat & __LISP_PAREN_IN) {
-    if (pstat.master & __LISP_SYMBOL_IN) {
-      pstat = lisp_ev(pstat, __LISP_SYMBOL_OUT);
-    }
-    lisp_sexp_node_add(&POOLP);
-    ++paren;
-  }
-
-  pstat.master |= sstat;
-
-  return pstat;
-}
-
-static inline struct lisp_cps lisp_whitespace(struct lisp_cps pstat) {
-  if (pstat.master & __LISP_SYMBOL_IN) {
-    done_chash();
-    pstat = lisp_ev(pstat, __LISP_SYMBOL_OUT);
-  }
-
-  return pstat;
-}
-
-static inline struct lisp_cps lisp_csym(struct lisp_cps pstat, char c) {
-  pstat.master |= __LISP_SYMBOL_IN;
-
-  if (!__LISP_ALLOWED_IN_NAME(c)) {
-    pstat.slave = 1;
-  }
-  else {
-    pstat.slave = do_chash(&chash, c);
-  }
-
-  DB_FMT("vslisp: character (%c) (0x%x)", c, chash.sum);
-
-  return pstat;
-}
-
-static int parse_ioblock(char* buf, uint size) {
-  int ret = 0;
-
-  for (uint i = 0; i < size; i++) {
-    char c = buf[i];
-
-    switch (c) {
-    case __LISP_PAREN_OPEN:
-      DB_MSG("-> EV: paren open");
-      lcps = lisp_stat(lcps, __LISP_PAREN_IN);
-      break;
-    case __LISP_PAREN_CLOSE:
-      DB_MSG("<- EV: paren close");
-      lcps = lisp_ev(lcps, __LISP_PAREN_OUT);
-      break;
-    case __LISP_WHITESPACE:
-      DB_MSG("-> EV: whitespace");
-      lcps = lisp_whitespace(lcps);
-      break;
-    default:
-      lcps = lisp_csym(lcps, c);
-      break;
-    }
-
-    if (lcps.slave) {
-      defer(1);
-    }
-  }
-
-done:
-  DB_FMT("vslisp: [ret = %d, paren = %d]", ret, paren);
-  return ret;
-}
-
-static int parse_bytstream(int fd) {
-  int ret = 0;
-
-  uint r;
-
-  do {
-    r = read(fd, iobuf, IOBLOCK);
-    maybe(parse_ioblock(iobuf, r));
-  } while (r == IOBLOCK);
-
-  if (paren) {
-    defer(1);
-  }
-  else if (lcps.master) {
-    lcps = lisp_whitespace(lcps);
-  }
-
-done:
-  return ret;
-}
-
-int main(void) {
-  int ret = 0;
-
-  if (frontend) {
-    maybe(frontend());
-  }
-
-  root    = POOLP->mem;
-  root->t = (__SEXP_SELF_ROOT | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
-
-  ret = parse_bytstream(STDIN_FILENO);
-
-  if (ret) {
-    write(STDERR_FILENO,
-          MSG("[ !! ] vslisp: error while parsing file\n"));
-    defer(1);
-  }
-
-done:
-  return ret;
+  defer_ret_with(ret, pool_clean(mpp));
 }

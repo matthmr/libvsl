@@ -9,8 +9,28 @@
 #    define true  0x1
 #  endif
 
+#  define defer_ret(x) \
+  done:                \
+    return (x)
+
+#  define defer_ret_with(x, y) \
+  done:                        \
+    y;                         \
+    return (x)
+
 #  define defer_func(x) \
   goto done
+
+#  define defer_if(x) \
+  if (x) {            \
+    defer_func();     \
+  }
+
+#  define defer_assert(x, y) \
+  if (!(x)) {                \
+    ret = (y);               \
+    defer_func();            \
+  }
 
 #  define defer(x) \
   ret = (x);       \
@@ -22,15 +42,11 @@
 
 #  define maybe(x) \
   ret = (x);       \
-  if (ret) {       \
-    defer_func();  \
-  }
+  defer_if(ret)
 
-#  define maybe_var(x) \
-  (x) = (y);           \
-  if (x) {             \
-    defer_func();      \
-  }
+#  define maybe_var(x,y) \
+  (x) = (y);             \
+  defer_if(x)
 
 #  define BIT(x) (1 << (x))
 #  define MSG(x) \

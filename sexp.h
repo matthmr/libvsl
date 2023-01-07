@@ -27,6 +27,12 @@ enum sexp_t {
   __SEXP_SELF_EMPTY  = BIT(11),
 };
 
+#  define CHILD       (-0)
+#  define ROOT        (-1)
+
+#  define RIGHT_CHILD (__SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)
+#  define LEFT_CHILD  (__SEXP_LEFT_SEXP  | __SEXP_LEFT_LEXP)
+
 struct pos_t {
   uint am;
   int  pidx; /** index of the pool section;
@@ -62,6 +68,8 @@ struct lisp_sexp {
   enum sexp_t  t;
 };
 
+extern struct lisp_sexp* root;
+
 #endif
 
 #ifndef LOCK_SEXP_INTERNALS
@@ -77,4 +85,3 @@ struct lisp_sexp {
 #  include "pool.h"
 
 #endif
-

@@ -22,7 +22,7 @@ library version of this program.
 Run `make libvsl` to make the library, then create a `.pvsl` file with the
 following syntax:
 
-- header
+- header (must be the first *SEXP* of the file)
 ```
 (<c-file-name>)
 ```
