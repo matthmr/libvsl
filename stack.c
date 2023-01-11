@@ -68,40 +68,46 @@ yield:
 
   if (STACK_PUSHED_VAR(ev)) {
 push_var:
-    maybe(lisp_stack_push_to_frame(stack, &frame));
+    assert(lisp_stack_sexp_frame_var(stack, &frame), 1);
     goto yield;
   }
 
   else if (STACK_PUSHED_FUNC(ev)) {
-    // in the case of a `quot'-like function, any
-    // GEXP ::= {SEXP | LEXP | SYM | <-} may return
-    // as literal, which means that something like:
-    //
-    //   (quot (not-a-function))
-    //
-    // shouldn't push `not-a-function' to the stack,
-    // just return its GEXP
+    /** in the case of a `quot'-like function, any
+        GEXP ::= {SEXP | LEXP | SYM | <-} may return
+        as literal, which means that something like:
+
+                    (quot (not-a-function))
+
+        shouldn't push `not-a-function' to the stack,
+        just return its GEXP
+     */
     if (STACK_QUOT(stack->ev)) {
       goto push_var;
     }
 
     if (stack->fun) {
-      maybe(lisp_stack_frame(stack));
-      maybe(lisp_stack_push_to_frame(stack, &frame));
+      assert(lisp_stack_frame(stack), 1);
+      assert(lisp_stack_frame_var(stack, &frame), 1);
       goto yield;
     }
     else {
-      defer(1);
+      defer_as(1);
     }
   }
 
   else if (STACK_POPPED(ev)) {
     // NOTE: it's the job of `::fun' to set up the
     // `stack' variable to correctly give in the
-    // `symtab' valus for `lisp_stack_push_to_frame'
-    maybe(stack->fun(stack));
+    // `symtab' values for `lisp_stack_frame_var'
+    assert(stack->fun(stack), 1);
   }
 
-done:
-  return ret;
+  done_for(ret);
 }
+  }
+
+  assert(varp > 0, 1);
+  done_for(ret);
+}
+// LEX stack: END

@@ -20,15 +20,15 @@ int main(void) {
   root    = POOLP->mem;
   root->t = (__SEXP_SELF_ROOT | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
 
-  defer_assert(frontend && (frontend() == 0), 1);
+  // `frontend' is not NULL, and `frontend()' exits with 0
+  assert(frontend && !frontend(), 1);
 
-  ret = parse_bytstream(STDIN_FILENO);
-
-  if (ret) {
+  // TODO: verbose error messages
+  assert_exec(
+    parse_bytstream(STDIN_FILENO), 1,
+    //err(ELIBVSLGEN)
     write(STDERR_FILENO,
-          MSG("[ !! ] libvsl: error while parsing file\n"));
-    defer(1);
-  }
+          MSG("[ !! ] libvsl: error while parsing file\n")));
 
-  defer_ret(ret);
+  done_for(ret);
 }

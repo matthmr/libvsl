@@ -1,9 +1,9 @@
 #include <unistd.h>
 
-#include "lex.h"
-
 #include "debug.h"
 #include "stack.h"
+
+// TODO: try to make these global variables stack-local (somehow)
 
 static struct lisp_lex lex  = {0};
 
@@ -38,7 +38,7 @@ lisp_ev(struct lisp_lex lex, enum lisp_lex_ev ev) {
       --lex.master.paren;
     }
     else {
-      defer_var(lex.slave, 1);
+      defer_for_as(lex.slave, 1);
     }
 
     // if (!lex.master.paren) {
@@ -46,19 +46,19 @@ lisp_ev(struct lisp_lex lex, enum lisp_lex_ev ev) {
     // }
   }
 
-  defer_ret(lex);
+  done_for(lex);
 }
 
 static inline struct lisp_lex
 lisp_whitespace(struct lisp_lex lex) {
   if (lex.master.ev & __LISP_SYMBOL_IN) {
     inc_hash_done();
-    defer_if(lex.slave != 0);
-
     lex = lisp_ev(lex, __LISP_SYMBOL_OUT);
+
+    assert_for(lex.slave != 0, 1, lex.slave);
   }
 
-  defer_ret(lex);
+  done_for(lex);
 }
 
 static inline struct lisp_lex
@@ -66,7 +66,7 @@ lisp_csym(struct lisp_lex lex, char c) {
   lex.master.ev |= __LISP_SYMBOL_IN;
 
   if (!__LISP_ALLOWED_IN_NAME(c)) {
-    defer_var(lex.slave, 1);
+    defer_for_as(lex.slave, 1);
   }
   else {
     struct lisp_symtab_ret ret = inc_hash(lex.master.chash, c);
@@ -76,7 +76,7 @@ lisp_csym(struct lisp_lex lex, char c) {
 
   DB_FMT("vslisp: character (%c) (0x%x)", c, chash.sum);
 
-  defer_ret(lex);
+  done_for(lex);
 }
 
 static int lisp_lex_bytstream(struct lisp_stack* stack) {
@@ -103,7 +103,7 @@ static int lisp_lex_bytstream(struct lisp_stack* stack) {
       break;
     }
 
-    defer_assert(lex.slave == 0, 1);
+    assert(lex.slave == 0, 1);
 
     // stack callback
     if (lex.master.ev & (__LISP_PAREN_IN  |    /* ...( -> push     */
@@ -116,14 +116,15 @@ static int lisp_lex_bytstream(struct lisp_stack* stack) {
 
   // didn't finish the expression: send feed callback to the frame,
   // the frame then calls `parse_bytstream' with the same callback,
-  // which will call `lisp_lex_bytstream' back
+  // which will call `lisp_lex_bytstream' back, continuing from
+  // where it left off
   if (lex.master.paren || (lex.master.ev & __LISP_SYMBOL_IN)) {
     stack->ev |= __STACK_FEED;
   }
 
   DB_FMT("vslisp: paren = %d", paren);
 
-  defer_ret(ret);
+  done_for(ret);
 }
 
 static int parse_bytstream_base(struct lisp_stack* stack) {
@@ -136,47 +137,41 @@ static int parse_bytstream_base(struct lisp_stack* stack) {
   // called with `feed' callback:
   //   immediately exit successfully, let `frame' call
   //   `bytstream' for us
-  if (lex.master.ev & __STACK_FEED) {
-    lex.master.ev &= ~__STACK_FEED;
+  if (stack->ev & __STACK_FEED) {
+    stack->ev &= ~__STACK_FEED;
 
     // there are no bytes left: ensure that there's nothing
     // dangling
-    if (!stack->typ.lex.size) {
-      defer_assert(!(
-        lex.master.paren ||
-        (lex.master.ev & __LISP_SYMBOL_IN)), 1);
+    if (!lex.master.size) {
+      assert(
+        (lex.master.paren == 0) || (!(lex.master.ev & __LISP_SYMBOL_IN)), 1);
     }
 
-    defer(0);
+    defer_as(0);
   }
 
   // feed `iobuf' to the lexer, listen for callbacks
-  defer_assert(lisp_lex_bytstream(stack) == 0, 1);
+  assert(lisp_lex_bytstream(stack), 1);
 
   /** NOTE: these are the only callbacks issued by `lisp_lex_bytstream'
             that `parse_bytstream_base' can handle, the rest are handled
             by the stack frame
    */
-  if (lex.master.ev & __LISP_PAREN_IN) { /* push */
+  if (stack->ev & __STACK_PUSH_FUNC) { /* push */
     lex.master.ev &= ~__LISP_PAREN_IN;
-    lex.slave = lisp_stack_lex_frame(stack);
-    defer_assert(lex.slave == 0, 1);
+    lex.slave      = lisp_stack_lex_frame(stack);
+    assert(lex.slave == 0, 1);
   }
-  else if (lex.master.ev & __LISP_SYMBOL_IN) {
+  else if (stack->ev & __STACK_PUSH_VAR) {
     lex.master.ev &= ~__LISP_SYMBOL_IN;
+    lex.slave = lisp_stack_lex_frame(stack);
+    assert(lex.slave == 0, 1);
     DB_MSG("TODO: implement top level symbol resolution");
   }
 
-  if (stack->typ.lex.size < IOBLOCK) {
-    // there should be not paren left dangling
-    defer_assert(lex.master.paren == 0, 1);
+  assert(lex.master.paren == 0, 1)
 
-    // if (lex.master.ev) {
-    //   lex = lisp_whitespace(lex);
-    // }
-  }
-
-  defer_ret(ret);
+  done_for(ret);
 }
 
 int parse_bytstream(int fd) {

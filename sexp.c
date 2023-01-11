@@ -465,11 +465,11 @@ static int lisp_do_sexp(POOL_T* mpp) {
   lisp_sexp_trans(&stack);
 
   if (stack.fun) {
-    maybe(lisp_stack_frame(&stack));
+    assert(lisp_stack_sexp_frame(&stack), 1);
   }
   else {
-    defer(1);
+    defer_as(1);
   }
 
-  defer_ret_with(ret, pool_clean(mpp));
+  done_for_with(ret, pool_clean(mpp));
 }

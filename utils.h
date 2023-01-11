@@ -1,6 +1,8 @@
 #ifndef LOCK_UTILS
 #  define LOCK_UTILS
 
+/** BOOLEAN: BEGIN */
+
 #  ifndef false
 #    define false 0x0
 #  endif
@@ -9,44 +11,125 @@
 #    define true  0x1
 #  endif
 
-#  define defer_ret(x) \
-  done:                \
+/** BOOLEAN: END */
+
+/** ERRCNTL: BEGIN */
+
+/**
+  ERROR CONTROL MACROS
+  --------------------
+
+  These macros are used for error control. There are three main categories:
+
+  - done macros
+  - defer macros
+  - assert macros
+
+  You have to define a done macro in the end of your function. Unconditionally
+  jump to them using defer macros, or condionally with assert macros. If using
+  the default defer or assert family of functions, make sure to define a stack
+  variable named `ret'
+
+  Every macro has modifiers which are separated by underscores. The positional
+  argument is the modifier + 1. E.g:
+
+  defer_as_with(x,y)
+    - defer
+      - as   y
+      - with y
+ */
+
+////////////////////////////////////////////////////////////
+
+// generic done guard, returning for `x'
+#  define done_for(x) \
+  done:              \
     return (x)
 
-#  define defer_ret_with(x, y) \
-  done:                        \
-    y;                         \
+// done guard, returning for `x', executing `y'
+#  define done_for_with(x, y) \
+  done:                       \
+    y;                        \
     return (x)
 
-#  define defer_func(x) \
+////////////////////////////////////////////////////////////
+
+// generic defer statement
+#  define defer(x) \
   goto done
 
+// defer statement, with the value of `x'
+#  define defer_as(x) \
+  ret = (x);          \
+  defer()
+
+// defer statement, with the value of `y' for `x'
+#  define defer_for_as(x,y) \
+  (x) = (y);                \
+  defer()
+
+////////////////////////////////////////////////////////////
+
+// conditional defer statement
 #  define defer_if(x) \
   if (x) {            \
-    defer_func();     \
+    defer();          \
   }
 
-#  define defer_assert(x, y) \
-  if (!(x)) {                \
-    ret = (y);               \
-    defer_func();            \
+// conditional defer statement, with return set to `y'
+#  define defer_if_as(x,y) \
+  if (x) {                 \
+    defer_as(y);           \
   }
 
-#  define defer(x) \
-  ret = (x);       \
-  defer_func()
+// conditional defer statement, executing `y'
+#  define defer_if_exec(x,y) \
+  if (x) {                   \
+    y;                       \
+    defer();                 \
+  }
 
-#  define defer_var(x, y) \
-  (x) = (y);              \
-  defer_func()
+// conditional defer statement, with return set to `y', executing `z'
+#  define defer_if_as_exec(x,y,z) \
+  if (x) {                        \
+    z;                            \
+    defer_as(y);                  \
+  }
 
-#  define maybe(x) \
-  ret = (x);       \
-  defer_if(ret)
+// conditional defer statement, with the value of `z' set to `y'
+#  define defer_if_for_as(x,y,z)  \
+  if (x) {                        \
+    defer_for_as((z), (y));       \
+  }
 
-#  define maybe_var(x,y) \
-  (x) = (y);             \
-  defer_if(x)
+// conditional defer statement, with the value of `z' set to `y', executing `w'
+#  define defer_if_for_as_exec(x,y,z,w) \
+  if (x) {                              \
+    w;                                  \
+    defer_for_as((z), (y));             \
+  }
+
+////////////////////////////////////////////////////////////
+
+// generic assert statement
+#  define assert(x,y)      \
+  defer_if_as(!(x), (y))
+
+// assert statement with the value of `z'
+#  define assert_for(x,y,z) \
+  defer_if_for_as(!(x), (y), (z))
+
+// assert statement executing `z'
+#  define assert_exec(x,y,z) \
+  defer_if_as_exec(!(x), (y), (z))
+
+// assert statement with the value of `z', executing `w'
+#  define assert_for_exec(x,y,z,w) \
+  defer_if_for_as_exec(!(x), (y), (z), (w))
+
+/** ERRCNTL: END */
+
+/** GENERIC UTILS: BEGIN */
 
 #  define BIT(x) (1 << (x))
 #  define MSG(x) \
@@ -63,5 +146,7 @@ struct __string {
 };
 
 typedef struct __string string;
+
+/** GENERIC UTILS: END */
 
 #endif
