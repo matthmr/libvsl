@@ -1,0 +1,335 @@
+#!/usr/bin/bash -e
+
+SET_FLAGS=(
+  'CC' 'CFLAGS' 'CFLAGSADD' 'ARFLAGS' 'PRE'
+)
+SET_FLAG_PREFIX='M4FLAG_conf_'
+
+INCLUDE_FLAGS=('DEBUG')
+INCLUDE_FLAG_PREFIX='M4FLAG_include_'
+
+CALLEES=(
+  "make-flags"
+  "make-deps"
+  "make-libraries"
+)
+
+BUILDS_CALL=(
+  "M4=\"\$M4\" M4FLAGS=\"\$M4FLAGS\"     scripts/${CALLEES[0]}.sh"
+
+  "CC=\"\$CC\" SED=\"\$SED\" \
+   M4=\"\$M4\" M4FLAGS=\"\$M4FLAGS\"     scripts/${CALLEES[1]}.sh"
+  "SED=\"\$SED\" \
+   M4=\"\$M4\" M4FLAGS=\"\$M4FLAGS\"     scripts/${CALLEES[2]}.sh"
+)
+
+################################################################################
+
+function print_targets {
+  local len=${#CALLEES[@]}
+  for ((i = 0; i < $len; i++))
+  do
+    echo "Target[$((i+1))]: ${CALLEES[$i]}"
+  done
+}
+
+case $1 in
+  '-h'|'--help')
+    printf "Usage:           ./configure [--help -h] [--targets -t] [--start=<level> --stop=<level>] [--only=<level>]
+Description:     Generate make scripts for \`vsl'
+
+Variables:       CC=\"C compiler (used in ./configure)\"
+                 M4=\"m4-like command (used in ./configure)\"
+
+Set flags:       --cc=, --cflags=, --cflagsadd=, --arflags=, --pre=
+
+Include flags:   [+/-]debug
+
+Note:            Make sure to call this script from the repository root
+                 Use @\"\"@ notation to pass in values that contain spaces in them, for example:
+
+                             ./configure --cflags=@\"-Wall -glldb\"@ --cc=clang
+
+Targets:         To bound the build step, pass in \`--start=<level>' and/or \`--stop=<level>' as the FIRST
+                 and SECOND argument of the ./configure file. The order doesn't matter.
+                 For example, to skip everything after the first target exclusively, you'd run:
+
+                                          ./configure --stop=1
+
+                 To skip everything before the third target exclusively, you'd run:
+
+                                          ./configure --start=3
+
+                 To execute only one target pass in \`--only=<level>'
+
+                 To get a list of targets, run:
+
+                                          ./configure --targets
+
+Run \`make help' to get an explanation of set- and include- flags
+"
+    exit 1
+    ;;
+  '-t'|'--targets')
+    print_targets
+    exit 1
+    ;;
+esac
+
+# faux_args are actually one more than the actual faux args
+faux_args=1
+
+__level_start=1 # fallbacks
+__level_stop=${#CALLEES[@]} # fallbacks
+level_start=$__level_start
+level_stop=$__level_stop
+function check_bounds {
+  local first="$1"
+  local second="$2"
+
+  # get faux args
+  if [[ -z $first ]]
+  then
+    faux_args=1
+
+  elif [[ -z $second ]]
+  then
+    faux_args=2
+
+  else
+    faux_args=3
+  fi
+
+  [[ $faux_args = 1 ]] && return 0
+
+  local opt_arg=
+  local opt_cmd=
+
+  # test `--only'; `only' is always the first one
+  opt_arg=${first%=*}
+  opt_cmd=${first#*=}
+
+  # apply `--only'
+  {
+    [[ $opt_arg = '--only' ]]
+  } && {
+    if [[ $opt_cmd -ge $level_start && $opt_cmd -le $level_stop ]]
+    then
+      level_start=$opt_cmd
+      level_stop=$opt_cmd
+      faux_args=2
+
+      # sanity check
+      if [[ "$level_start" -gt "$__level_stop" || "$level_stop" -gt "$__level_stop" ]]
+      then
+        return 1
+      fi
+      return 0
+    else
+      return 1
+    fi
+  } || {
+    opt_arg=
+    opt_cmd=
+  }
+
+  local isFirst='yes'
+
+  local hasStart='no'
+  local hasStop='no'
+
+  for opt in $first $second
+  do
+
+    opt_arg=${opt%=*}
+    opt_cmd=${opt#*=}
+
+    # empty value means wrong syntax
+    if [[ -z $opt_cmd || $opt_cmd = $opt_arg && $opt_cmd =~ ^--.*$ ]]
+    then
+        return 1
+    fi
+
+    if [[ $opt_arg = '--start' ]]
+    then
+
+      if [[ $hasStart = 'yes' ]]
+      then
+        return 1
+      else
+        hasStart='yes'
+      fi
+
+      if [[ $opt_cmd -ge $level_start && $opt_cmd -le $level_stop ]]
+      then
+        level_start=$opt_cmd
+      else
+        return 1
+      fi
+
+    elif [[ $opt_arg = '--stop' ]]
+    then
+
+      if [[ $hasStop = 'yes' ]]
+      then
+        return 1
+      else
+        hasStop='yes'
+      fi
+
+      if [[ $opt_cmd -ge $level_start && $opt_cmd -le $level_stop ]]
+      then
+        level_stop=$opt_cmd
+      else
+        return 1
+      fi
+
+    # if didn't find to be the first, don't bother with the second
+    elif [[ $isFirst = 'yes' ]]
+    then
+      faux_args=1
+      return 0
+    else
+      faux_args=2
+      return 0
+    fi
+
+    isFirst='no'
+
+    # sanity check
+    if [[ "$level_start" -gt "$__level_stop" || "$level_stop" -gt "$__level_stop" ]]
+    then
+      return 1
+    fi
+
+  done
+
+}
+
+promise_closing='no'
+M4FLAGS=
+function parse_flags {
+  for flag in $can_flags
+  do
+
+    if [[ $promise_closing = 'yes' ]]
+    then
+      if [[ ${flag:(-1)} = '@' ]] # add to previous entry, then close promise
+      then
+        flag=${flag%@} # ignore trailing `@'
+        M4FLAGS+="${flag}' "
+        promise_closing='no'
+        continue
+      else # continue adding to previous entry
+        M4FLAGS+="${flag} "
+        continue
+      fi
+    fi
+
+    if [[ ${flag:0:2} = '--' ]] # probably setting a set-flag
+    then
+
+      flag=${flag:2} # ignore the '--'
+      local flag_arg=${flag%=*} # get argument
+      flag_arg=${flag_arg^^} # make it uppercase
+      local flag_cmd=${flag#*=} # get value
+
+      # set promise for closing `@'
+      if [[ ${flag_cmd:0:1} = '@' ]]
+      then
+        flag_cmd=${flag_cmd#@} # ignore leading `@'
+        promise_closing='yes'
+      fi
+
+      # empty argument or value throws error; if they are the same it is likely the bash separator did not find the macthing pair
+      if [[ -z ${flag_arg} || -z ${flag_cmd} || ${flag_arg} = ${flag_cmd} ]]
+      then
+        return 1
+      fi
+
+      local found_set_flag='no'
+      for set_flag in ${SET_FLAGS[@]} # check against `SET_FLAGS' for a match
+      do
+        if [[ ${flag_arg} = ${set_flag} ]]
+        then
+          found_set_flag='yes'
+          break
+        fi
+      done
+
+      [[ ${found_set_flag} = 'yes' ]] || return 1; # the flag was not found
+
+      # the flag was found
+      if [[ $promise_closing = 'yes' ]]
+      then
+        M4FLAGS+="-D${SET_FLAG_PREFIX}${flag_arg}='${flag_cmd} "
+      else
+        M4FLAGS+="-D${SET_FLAG_PREFIX}${flag_arg}=${flag_cmd} "
+      fi
+
+    elif [[ ${flag:0:1} = '-' || ${flag:0:1} = '+' ]] # probably setting an include-flag
+    then
+
+      local flag_arg=${flag:1} # ignore the '-' or '+' -> get flag
+      flag_arg=${flag_arg^^} # make it uppercase
+      local bool=${flag:0:1}
+
+      local found_inc_flag='no'
+      for inc_flag in ${INCLUDE_FLAGS[@]} # check against `SET_FLAGS' for a match
+      do
+        if [[ ${flag_arg} = ${inc_flag} ]]
+        then
+          found_inc_flag='yes'
+          break
+        fi
+      done
+
+      [[ ${found_inc_flag} = 'yes' ]] || return 1; # the flag was not found
+
+      # the flag was found
+      local arg=
+      [[ ${bool} = '+' ]] && arg=1 || arg=0
+      M4FLAGS+="-D${INCLUDE_FLAG_PREFIX}${flag_arg}=${arg} " # ... add it to the m4 flags
+
+    else
+      return 1 # we only accept options
+    fi
+
+  done
+}
+
+function call_scripts {
+  echo "[ INFO ] starting level: $level_start"
+  echo "[ INFO ] stopping level: $level_stop"
+
+  level_start=$((level_start-1))
+  level_stop=$((level_stop-1))
+
+  for ((i = $level_start; i <= $level_stop; i++))
+  do
+    echo "[ .. ] Calling 'scripts/${CALLEES[$i]}.sh'"
+    eval ${BUILDS_CALL[$i]}
+  done
+}
+
+################################################################################
+
+{
+  check_bounds "$1" "$2"
+} || {
+  echo "[ !! ] Bad usage. Run ./configure --help"
+  exit 1
+}
+
+can_flags=${@:$faux_args}
+
+{
+  parse_flags
+} || {
+  echo "[ !! ] Bad usage. Run ./configure --help"
+  exit 1
+}
+
+call_scripts
+
+echo "[ OK ] ./configure: Done"

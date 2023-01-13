@@ -2,10 +2,13 @@
 *.o
 *.so
 *.a
-vslisp
+prevsl
+
+# Make
+make/*.mk
+make/*.in
 
 # Pre
-prevsl
 lisp.c
 lisp*
 
