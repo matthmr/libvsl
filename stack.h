@@ -2,10 +2,11 @@
 #  define LOCK_STACK
 
 // we only want the *definition* of POOL_T from `sexp.h', not the implementation
-// symtab.h <- sexp.h
 #  define LOCK_POOL_DEF
+#  define LOCK_POOL_THREAD
 
 #  include "sexp.h"
+#  include "pool.h"
 
 struct lisp_stack;
 

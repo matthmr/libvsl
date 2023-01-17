@@ -10,12 +10,12 @@
 
 #  define MEMPOOL(t,am)     \
    POOL_T {                 \
-    t mem[am];              \
     struct __mempool* next; \
     struct __mempool* prev; \
     uint idx;               \
     uint total;             \
     uint used;              \
+    t mem[am];              \
   }
 
 /**
@@ -60,11 +60,11 @@ MEMPOOL(POOL_ENTRY_T, POOL_AM);
 MEMPOOL_RET(POOL_ENTRY_T);
 #endif
 
-#ifndef LOCK_POOL_DEF
-#  define LOCK_POOL_DEF
+#ifndef LOCK_POOL_THREAD
+#  define LOCK_POOL_THREAD
 
 // the first thread entry
-static POOL_T gmp = {
+static POOL_T __mempool_t = {
   .mem   = {0},
   .next  = NULL,
   .prev  = NULL,
@@ -72,11 +72,16 @@ static POOL_T gmp = {
   .total = POOL_AM,
   .used  = 1,
 };
-#  define POOL gmp
+#  define POOL __mempool_t
 
 // the thread pointer
-static POOL_T* gmpp = &gmp;
-#  define POOLP gmpp
+static POOL_T* __mempool_tp = &__mempool_t;
+#  define POOLP __mempool_tp
+
+#endif
+
+#ifndef LOCK_POOL_DEF
+#  define LOCK_POOL_DEF
 
 /**
    Adds a node to a memory pool, returning a structure with the memory for the

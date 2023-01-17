@@ -26,7 +26,7 @@
   - assert macros
 
   You have to define a done macro in the end of your function. Unconditionally
-  jump to them using defer macros, or condionally with assert macros. If using
+  jump to them using defer macros, or conditionally with assert macros. If using
   the default defer or assert family of functions, make sure to define a stack
   variable named `ret'
 
@@ -130,6 +130,9 @@
 /** ERRCNTL: END */
 
 /** GENERIC UTILS: BEGIN */
+#  ifndef NULL
+#    define NULL ((void*)0)
+#  endif
 
 #  define BIT(x) (1 << (x))
 #  define MSG(x) \
