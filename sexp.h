@@ -72,6 +72,14 @@ extern struct lisp_sexp* root;
 
 #endif
 
+#ifndef LOCK_SEXP_FUNC
+#  define LOCK_SEXP_FUNC
+
+#  define RIGHT (__SEXP_RIGHT_SYM | __SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)
+#  define SWAP_RL(x) (((x) & RIGHT) >> 1)
+
+#endif
+
 #ifndef LOCK_SEXP_INTERNALS
 #  define LOCK_SEXP_INTERNALS
 

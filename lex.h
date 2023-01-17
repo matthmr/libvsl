@@ -48,11 +48,3 @@ struct lisp_lex {
 int parse_bytstream(int fd);
 
 #endif
-
-#ifndef LOCK_LEX_FUNC
-#  define LOCK_LEX_FUNC
-
-#  define RIGHT (__SEXP_RIGHT_SYM | __SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)
-#  define SWAP_RL(x) (((x) & RIGHT) >> 1)
-
-#endif
