@@ -4,61 +4,55 @@ A very small implementation of lisp, nothing too fancy.
 
 ## Building
 
-Run `make libvsl` to compile the project. `make` variables are:
+Run `./configure` then `make libvsl` to compile the project.
+
+`./configure` variables are:
+- `[+/-]debug`: generate verbose binaries (`-`)
+
+`make` variables are:
 
 - `CC` - the C compiler (`cc`)
 - `CFLAGS` - `CC` major flags (`-Wall`)
-- `CFLAGSADD` - `CC` minor flags ()
+- [1] `CFLAGSADD` - `CC` minor flags ()
 - `AR` - the ELF archiver (`ar`)
+- `ARFLAGS` - `AR` major flags
+- `PRE` - the *prevsl* source file that will make your lisp (read below)
+
+`make` variables are also `./configure` variables. Pass them with double dashes
+and lowercase, for example:
+
+```shell
+# make variable
+make CC=tcc CFLAGS=-O2 thing
+
+# ./configure variable
+./configure --cc=tcc --cflags=-O2 && make thing
+```
+
+See `./configure --help`.
+
+[1]: major flags are always passed to all targets at ./configure time, minor
+     flags are only passed at make time. This is a way to pass flags at make
+     time that don't intefere with ./configure time
 
 ## Usage in other projects
-<!-- TODO: this is wrong, and/or incomplete -->
 
-I started this as a sanity check to see if I was able to implement a full
-functioning static lisp for `GPLD`, but I realized that this may be more
-suitable for code inlining than my other project `GPLD`. So I decided to build a
-library version of this program.
+I started this as a sanity check to see if I was able to implement a fully
+functioning static LISP for GPLD, but I realized this may be useful as a more
+lightweight version of GPLD. So I decided to build a library version of this
+program.
 
-Run `make libvsl` to make the library, then create a `.pvsl` file with the
-following syntax:
+Notice that this *is* less powerful than GPLD, as it is used only in
+the stage 0 of bootstrapping for GPLD. That means you still have to write some C
+code for your LISP functions/objects and you won't have numeric literals. See
+the [documentation](./LIBVSL.md) on LIBVSL's PREVSL.
 
-- header (must be the first *SEXP* of the file)
-```
-(<c-file-name>)
-```
+Create a `.pvsl` file then run `./configure --pre=<your-pvsl-file> && make
+lisp`, or `make PRE=<your-pvsl-file> lisp` if you've already run `./configure`
+before.
 
-- body
-```
-(<symbol-name> <input-form-sexp> <output-form-sexp> <c-function-name>)
-```
-
-Where:
-
-- `<input-form-sexp>`: is a list containing either `t`s or `nil`s, where `t`s
-  represent *sexp*s and `nil`s represent symbols
-  - the same is true for `<output-form-sexp>`
-- `<c-function-name>`: is the name of a *LISP*-defined C function (which you'll
-  have to define beforehand
-
-For example (this file is named `ex.pvsl`, and it has functions defined in a
-file named `ex-func.c`):
-
-```
-(ex-func.c)
-(greet (nil) (nil) lisp_function_greet)
-```
-
-Then run `make lisp PRE=<pvsl-file>`.
-
-Try it out:
-
-``` shell
-$ ex-lisp
-(greet world)
-C-d
-hello world
-$
-```
+If you've followed PREVSL's guidelines, you should have a fully
+functioning LISP by the end.
 
 # NOTE -- 20221226
 
@@ -83,5 +77,4 @@ Use the former to link to the latter.
 
 # License
 
-This repository is licensed under the [MIT
-License](https://opensource.org/licenses/MIT).
+This repository is licensed under the [MIT License](https://opensource.org/licenses/MIT).

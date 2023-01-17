@@ -1,27 +1,19 @@
-// vslisp: a very simple lisp implementation;
-//         not bootstrapped
+// libvsl: a vsl implementation; not bootstrapped
 
-// TODO: untangle this include mess
+// TODO: read from file as argument
 
 #define LIBVSL_BACKEND
 
 #include "libvsl.h"
 
-// unlock the internals of `sexp.h' to get the memory pool
-#ifdef LOCK_SEXP_INTERNALS
-#  undef LOCK_SEXP_INTERNALS
-#endif
-
-#include "sexp.h"
-
 int main(void) {
   int ret = 0;
 
-  root    = POOLP->mem;
-  root->t = (__SEXP_SELF_ROOT | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
+  sexp_init();
 
-  // `frontend' is not NULL, and `frontend()' exits with 0
-  assert(frontend && !frontend(), 1);
+  if (frontend) {
+    assert(frontend() == 0, 1);
+  }
 
   // TODO: verbose error messages
   assert_exec(

@@ -2,7 +2,6 @@
 #  define LOCK_LEX
 
 #  define LOCK_SYMTAB_INTERNALS
-
 #  include "symtab.h"
 
 #  ifndef IOBLOCK
@@ -32,12 +31,16 @@ enum lisp_lex_ev {
 
   __LISP_PAREN_IN       = BIT(2),
   __LISP_SYMBOL_IN      = BIT(3),
+
+  __LISP_FEED           = BIT(4),
 };
 
 struct lisp_lex_m {
-  enum lisp_lex_ev   ev;    /** @ev:    the lex event   */
-  uint               paren; /** @paren: the paren level */
-  struct lisp_symtab chash; /** @chash: the symbol hash */
+  enum lisp_lex_ev ev;    /** @ev:    the lex event                    */
+  uint             paren; /** @paren: the paren level                  */
+  uint             cb_i;  /** @cb_i:  the bytstream character index    */
+  uint             size;  /** @size:  the bytstream (significant) size */
+  struct lisp_hash hash;  /** @chash: the symbol hash                  */
 };
 
 struct lisp_lex {

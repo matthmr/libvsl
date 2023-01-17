@@ -15,26 +15,16 @@
 
 #  define ASCII_FAC (32)
 
-union lisp_symtab_sym {
-  void* func;
-  void* sym;
-};
-
-enum lisp_symtab_typ {
-  __LISP_FUN = BIT(0),
-  __LISP_SYM = BIT(1),
-};
-
-struct lisp_symtab {
+struct lisp_hash {
   /**
      @sum:  the weighted numeric sum of the symbol
               - the hash index is gotten by modulating the
                 field with the `SYMTAB_PRIM' macro
-     @psum: the numeric sum of the symbol, without weights
-     @len:  the length of the symbol
    */
-  uint   sum, psum;
-  ushort len;
+  uint   sum;
+
+  uint   psum; /** @psum: the numeric sum of the symbol, without weights */
+  ushort len;  /** @len:  the length of the symbol */
 
   /**
      @com_part: the sequential partitional factor of the
@@ -51,39 +41,63 @@ struct lisp_symtab {
        - 5*1 + 5*2       -> @com_part = 0, @com_pos = 0
    */
   uchar com_part, com_pos;
-
-  // TODO: create a datatype for LISP functions
-  //       that doesn't need to be casted
-  /**
-     @typ: type of the symbol
-     @dat: data for the symbol, needs to be casted
-   */
-  enum lisp_symtab_typ  typ;
-  union lisp_symtab_sym dat;
 };
 
-struct clisp_symtab {
+enum lisp_sym_typ {
+  __LISP_SYM,
+  __LISP_FUN,
+};
+
+/** NOTE: the implementations of this LISP are *purely symbolic*,
+          that means no integer, string, float, or whatever other
+          literal type you're used to are implemented in this language.
+          for those in a LISP, see my other project GPLD:
+
+                     https://github.com/matthmr/gpld
+
+          it uses VSL as the stage 0 of its bootstrap and is
+          forwards-compatible with (some) VSL code
+*/
+struct lisp_sym {
+  struct lisp_hash  hash; /** @hash:  the hash of the symbol */
+
+  void*             dat;  /** @dat:  data for the symbol     */
+  enum lisp_sym_typ typ;  /** @typ:  type of the symbol      */
+
+  uint litr[2];
+  uint size[2];
+};
+
+struct lisp_hash_ret {
+  struct lisp_hash master;
+  int slave;
+};
+
+struct lisp_sym_ret {
+  struct lisp_sym master;
+  int slave;
+};
+
+struct clisp_sym {
   const char* str;
 
-  /** @hash: will be filled at runtime via the
-             `frontend' exported function
-  */
-  struct lisp_symtab hash;
+  /** @tab: will be filled at runtime via the `frontend' function */
+  struct lisp_sym sym;
 };
 
-int  do_chash(struct lisp_symtab* chash, char c);
-void done_chash(void);
+struct lisp_hash_ret inc_hash(struct lisp_hash hash, char c);
+void inc_hash_done(void);
+void hash_done(struct lisp_hash* hash);
+void str_hash(struct clisp_sym* ctab);
 
-// TODO: these are stubs
-int   lisp_symtab_set(struct lisp_symtab chash);
-int   lisp_symtab_get(struct lisp_symtab chash);
-uint  lisp_symtab_getsize(struct lisp_symtab chash);
+struct lisp_sym_ret lisp_symtab_set(struct lisp_hash hash);
+struct lisp_sym_ret lisp_symtab_get(struct lisp_hash hash);
 #endif
 
 #ifndef LOCK_SYMTAB_INTERNALS
 #  define LOCK_SYMTAB_INTERNALS
 
-#  define POOL_ENTRY_T  struct lisp_symtab
+#  define POOL_ENTRY_T  struct lisp_sym
 #  define POOL_AM       SYMPOOL
 
 #  include "pool.h"

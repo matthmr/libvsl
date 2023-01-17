@@ -1,98 +1,88 @@
-#include "pool.h"
 #include "symtab.h"
 
-static uint chash_i = 0;
+// TODO: ensure that the hash algorithm doesn't trigger false positives
+// TODO: implement lexical scoping
 
-struct MEMPOOL(ulong, ulong, SYMPOOL);
-struct MEMPOOL_RET(ulong, ulong);
+static uint hash_i = 0;
 
-struct t {
-  struct ulong mem[10];
-  struct t* next;
-  struct t* prev;
-  uint idx;
-  uint total;
-  uint used;
-};
+static POOL_T symtab[SYMTAB_PRIM];
 
-static struct MEMPOOL_TMPL(ulong) symtab[SYMTAB];
-
-static struct MEMPOOL_TMPL(lisp_symtab) symmp = {
-  .mem   = {0},
-  .next  = NULL,
-  .prev  = NULL,
-  .idx   = 0,
-  .total = SYMPOOL,
-  .used  = 1,
-};
-static struct MEMPOOL_TMPL(lisp_symtab)* symmpp = &symmp;
-
-static inline void pool_clean(struct MEMPOOL_TMPL(lisp_symtab)* pp) {
+static inline void pool_clean(POOL_T* pp) {
   return;
 }
-static inline struct MEMPOOL_RET_TMPL(lisp_symtab)
-pool_add_node(struct MEMPOOL_TMPL(lisp_symtab)* mpp) {
-  struct MEMPOOL_RET_TMPL(lisp_symtab) ret = {
-    .mem   = NULL,
-    .base  = mpp,
-    .entry = NULL,
-    .same  = true,
+
+struct lisp_hash_ret inc_hash(struct lisp_hash hash, char c) {
+  struct lisp_hash_ret hash_ret = {
+    .master = hash,
+    .slave  = 0,
   };
 
-  if (mpp->used == mpp->total) {
-    if (!mpp->next) {
-      mpp->next        = malloc(sizeof(struct MEMPOOL_TMPL(lisp_symtab)));
+  hash_i          = (hash_i >= SYMTAB_PRIM? 1: (hash_i + 1));
 
-      mpp->next->idx   = (mpp->idx + 1);
-      mpp->next->prev  = mpp;
-      mpp->next->next  = NULL;
-    }
+  uchar pre_mod   = (hash.sum % SYMTAB_PRIM);
+  hash.sum       += (c - ASCII_FAC)*hash_i;
+  hash.psum      += (c - ASCII_FAC);
+  uchar post_mod  = (hash.sum % SYMTAB_PRIM);
 
-    ret.same          = false;
-    mpp->next->total  = mpp->total;
-    mpp->next->used   = 0;
-    mpp               = mpp->next;
+  ++hash.len;
+
+  /** we bound the length of a symbol to the square of its prime factor.
+      for the default prime, this makes this LISP understand symbols
+      up to 9409 characters
+   */
+  if (hash.len > SYMTAB_MAX_SYM) {
+    defer_for_as(hash_ret.slave, 1);
   }
 
-  ret.mem   = mpp;
-  ret.entry = (mpp->mem + mpp->used);
-  ++mpp->used;
+  if (pre_mod && post_mod) {
+    hash.com_pos  = hash.len;
+    hash.com_part = (c - ASCII_FAC);
+  }
 
+  hash_ret.master = hash;
+
+  done_for(hash_ret);
+}
+
+void inc_hash_done(void) {
+  hash_i = 0;
+}
+
+void hash_done(struct lisp_hash* hash) {
+  hash->sum      = 0;
+  hash->psum     = 0;
+  hash->len      = 0;
+  hash->com_part = 0;
+  hash->com_pos  = 0;
+}
+
+// TODO: stub
+void str_hash(struct clisp_sym* tab) {
+  // struct lisp_sym_ret tab_ret;
+  // const char* str = tab->str;
+
+  // for (uint i = 0;; ++i) {
+  //   char c = str[i];
+
+  //   tab_ret = inc_hash(tab_ret.master, c);
+
+  //   if (!c) {
+  //     break;
+  //   }
+  // }
+
+  // inc_hash_done();
+  // tab->tab = tab_ret.master;
+}
+
+// TODO: the functions below are stubs
+
+struct lisp_sym_ret lisp_symtab_set(struct lisp_hash hash) {
+  struct lisp_sym_ret ret = {0};
   return ret;
 }
-static inline struct MEMPOOL_RET_TMPL(lisp_symtab)
-pool_from_idx(struct MEMPOOL_TMPL(lisp_symtab)* mpp,
-              uint idx) {
-  struct MEMPOOL_RET_TMPL(lisp_symtab) ret = {0};
-  struct MEMPOOL_TMPL(lisp_symtab)* pp     = mpp;
-  int diff = (idx - mpp->idx);
 
-  if (diff > 0) {
-    for (; diff; --diff) {
-      pp = pp->next;
-    }
-  }
-  else if (diff < 0) {
-    for (diff = -diff; diff; --diff) {
-      pp = pp->prev;
-    }
-  }
-
-  ret.entry  =
-    (ret.mem = pp)->mem;
-  ret.base   = mpp;
-  ret.same   = (bool) (pp == mpp);
-
-  return ret;
-}
-
-ulong do_chash(ulong chash, char c) {
-  return chash*(chash_i += 1);
-}
-
-ulong done_chash(ulong chash) {
-  ulong ret = chash % chash_i;
-  hash_i    = 0;
-
+struct lisp_sym_ret lisp_symtab_get(struct lisp_hash hash) {
+  struct lisp_sym_ret ret = {0};
   return ret;
 }

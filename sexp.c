@@ -1,8 +1,19 @@
 #include "debug.h"
-#include "stack.h"
+#include "stack.h" // includes `sexp.h'
 
-static struct lisp_sexp*  head  = NULL;
-struct lisp_sexp* root          = NULL;
+#undef LOCK_POOL_DEF
+#undef LOCK_POOL_THREAD
+
+// TODO: the tree going to become a generic memory pool
+// because the lexer can now send callbacks directly to
+// the stack
+
+// `stack.h' locks the pool definition,
+// so we have to include `pool.h' again
+#include "pool.h"
+
+static struct lisp_sexp* head = NULL;
+struct lisp_sexp* root        = NULL;
 
 static inline void pool_clean(POOL_T* pp) {
   uint pn = pp->total;
@@ -65,7 +76,7 @@ lisp_sexp_node_get_pos(enum sexp_t t, POOL_RET_T pr,
   return pr;
 }
 
-static void lisp_sexp_node_add(POOL_T** mpp) {
+void lisp_sexp_node_add(POOL_T** mpp) {
   DB_MSG("-> lisp_sexp_node_add()");
 
   if (!head) {
@@ -174,11 +185,11 @@ static void lisp_sexp_node_add(POOL_T** mpp) {
   }
 }
 
-static void lisp_sexp_sym(POOL_T** mpp) {
+void lisp_sexp_sym(POOL_T** mpp, struct lisp_hash hash) {
+  /** for now, top-level symbols are silently ignored
+   */
   if (!head) {
-    // TODO: implement this
-    DB_MSG("-> lisp_do_sym()");
-    goto done;
+    return;
   }
 
   DB_MSG("-> lisp_sexp_sym()");
@@ -191,7 +202,7 @@ static void lisp_sexp_sym(POOL_T** mpp) {
      */
     head->t         &= ~__SEXP_LEFT_EMPTY;
     head->t         |= __SEXP_LEFT_SYM;
-    head->left.sym   = chash;
+    head->left.sym   = hash;
   }
   else if (head->t & __SEXP_RIGHT_EMPTY) {
     /**
@@ -201,7 +212,7 @@ static void lisp_sexp_sym(POOL_T** mpp) {
      */
     head->t         &= ~__SEXP_RIGHT_EMPTY;
     head->t         |= __SEXP_RIGHT_SYM;
-    head->right.sym  = chash;
+    head->right.sym  = hash;
   }
   else {
     /**
@@ -229,7 +240,7 @@ static void lisp_sexp_sym(POOL_T** mpp) {
     lexp_head->t    =
       (SWAP_RL(old_head.t) | __SEXP_RIGHT_SYM | __SEXP_SELF_LEXP);
     lexp_head->root = lisp_sexp_node_set_pos(ROOT, pr, head);
-    lexp_head->right.sym = chash;
+    lexp_head->right.sym = hash;
 
     /** change the right type of head from whatever it was to `lexp'
      */
@@ -255,11 +266,6 @@ static void lisp_sexp_sym(POOL_T** mpp) {
      */
     head = lexp_head;
   }
-
-done:
-  chash.sum     = 0;
-  chash.len     = 0;
-  chash.com_pos = 0;
 }
 
 static void
@@ -295,12 +301,12 @@ lisp_sexp_trans(struct lisp_stack* stack) {
   POOL_T*    mpp;
   POOL_RET_T pp;
 
-  mpp      = stack->mpp;
+  mpp      = stack->typ.sexp.mpp;
 
   pp.base  = mpp;
   pp.mem   = mpp;
   pp.entry = mpp->mem;
-  head     = stack->head;
+  head     = stack->typ.sexp.head;
   //head     = root;
 
   enum sexp_t t  = 0;
@@ -331,10 +337,10 @@ stage1:
 
       // symbol under LEXP is just a symbol
       if (t & __SEXP_SELF_LEXP) {
-        lisp_stack_push_var(stack, mpp, head, __STACK_PUSH_LEFT);
+        lisp_stack_sexp_push_var(stack, mpp, head, __STACK_PUSH_LEFT);
       }
       else {
-        lisp_stack_push(stack, mpp, head);
+        lisp_stack_sexp_push(stack, mpp, head);
       }
 
       return;
@@ -357,7 +363,7 @@ stage1:
       */
 
       DB_FMT("  -> (rebound-left) right = 0x%x", head->right.sym.sum);
-      lisp_stack_push_var(stack, mpp, head, __STACK_PUSH_RIGHT);
+      lisp_stack_sexp_push_var(stack, mpp, head, __STACK_PUSH_RIGHT);
       return;
     }
   }
@@ -371,13 +377,13 @@ stage3b:
 
     // hit the root from the right: there are no more elements,
     // pop for the last time
-    lisp_stack_pop(stack, mpp, head);
+    lisp_stack_sexp_pop(stack, mpp, head);
     return;
   }
 
   // the current head is an SEXP: pop it, then go to `stage3b_popped'
   if (t & __SEXP_SELF_SEXP) {
-    lisp_stack_pop(stack, mpp, head);
+    lisp_stack_sexp_pop(stack, mpp, head);
     return;
   }
 
@@ -409,14 +415,13 @@ stage3b_popped:
   }
   else {
     DB_FMT("  -> (rebound-left) right = 0x%x", head->right.sym.sum);
-    lisp_stack_push_var(stack, mpp, head, __STACK_PUSH_RIGHT);
+    lisp_stack_sexp_push_var(stack, mpp, head, __STACK_PUSH_RIGHT);
     return;
     //goto stage3b;
   }
 }
 
-static void
-lisp_sexp_end(POOL_T* mpp, struct lisp_sexp* head) {
+void lisp_sexp_end(POOL_T* mpp) {
   DB_MSG("<- lisp_sexp_end()");
 
   POOL_RET_T pp = {0};
@@ -451,7 +456,8 @@ again:
   head = phead;
 }
 
-static int lisp_do_sexp(POOL_T* mpp) {
+// TODO: this is wrong with the new lexer; please refactor
+int lisp_sexp_eval(POOL_T* mpp) {
   int ret = 0;
 
   struct lisp_stack stack;
@@ -464,12 +470,12 @@ static int lisp_do_sexp(POOL_T* mpp) {
 
   lisp_sexp_trans(&stack);
 
-  if (stack.fun) {
-    assert(lisp_stack_sexp_frame(&stack), 1);
-  }
-  else {
-    defer_as(1);
-  }
-
   done_for_with(ret, pool_clean(mpp));
 }
+
+int sexp_init(void) {
+  root    = POOLP->mem;
+  root->t = (__SEXP_SELF_ROOT | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
+
+  return 0;
+};

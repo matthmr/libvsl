@@ -1,113 +1,155 @@
-// TODO: if any bug reports appear regarding stack overflow,
-//       create a pool for the stack. as far as I've tested,
-//       as long as you don't try to compute something
-//       ridiculously recursive you should be fine
-
 #include "stack.h"
 
+////////////////////////////////////////////////////////////
+
+/** SEXP stack: BEGIN */
+
+// TODO: stub
 void
-lisp_stack_push(struct lisp_stack* stack,
-                POOL_T* mpp, struct lisp_sexp* head) {
-  stack->ev   |= __STACK_PUSH_FUNC;
-  stack->head  = head;
-  stack->mpp   = mpp;
-  stack->fun   = lisp_symtab_get(head->left.sym);
+lisp_stack_sexp_push(struct lisp_stack* stack,
+                     POOL_T* mpp, struct lisp_sexp* head) {
+  stack->ev  |= __STACK_PUSH_FUNC;
+  // stack->fun  = (lisp_fun) head->left.sym.dat;
+
+  stack->typ.sexp.head = head;
+  stack->typ.sexp.mpp  = mpp;
 }
 
+// TODO: stub
 void
-lisp_stack_push_var(struct lisp_stack* stack, POOL_T* mpp,
-                    struct lisp_sexp* head, enum lisp_stack_ev ev) {
-  stack->ev   |= ev;
-  stack->head  = head;
-  stack->mpp   = mpp;
-  stack->fun   = lisp_symtab_get(
-    (ev & __STACK_PUSH_LEFT)? head->left.sym: head->right.sym);
+lisp_stack_sexp_push_var(struct lisp_stack* stack, POOL_T* mpp,
+                         struct lisp_sexp* head, enum lisp_stack_ev ev) {
+  stack->ev  |= ev;
+  // stack->fun  = (lisp_fun) ((ev & __STACK_PUSH_LEFT)?
+  //                            head->left.sym: head->right.sym).dat;
+
+  stack->typ.sexp.head = head;
+  stack->typ.sexp.mpp  = mpp;
 }
 
-// TODO: this function
+// TODO: stub
 void
-lisp_stack_pop(struct lisp_stack* stack, POOL_T* mpp, struct lisp_sexp* head) {
-  stack->ev   |= __STACK_POP;
-  stack->head  = head;
-  stack->mpp   = mpp;
+lisp_stack_sexp_pop(struct lisp_stack* stack, POOL_T* mpp,
+                    struct lisp_sexp* head) {
+  stack->ev |= __STACK_POP;
+  stack->typ.sexp.head = head;
+  stack->typ.sexp.mpp  = mpp;
 }
 
-int
-lisp_stack_push_to_frame(struct lisp_stack* stack,
-                         struct lisp_frame* frame) {
+// TODO: stub
+static int
+lisp_stack_sexp_frame_var(struct lisp_frame* frame) {
+  int ret = 0;
+  done_for(ret);
+}
+
+// TODO: stub
+static int lisp_stack_sexp_frame(struct lisp_stack* stack) {
+  int ret  = 0;
+  done_for(ret);
+}
+/** SEXP stack: END */
+
+////////////////////////////////////////////////////////////
+
+/** LEX stack: BEGIN */
+static int
+lisp_stack_lex_frame_var(struct lisp_frame* frame,
+                         struct lisp_sym* sym) {
   int ret = 0;
 
-  if (frame->tab.i >= frame->tab.size) {
-    defer(1);
+  uint* size = sym->size;
+
+  if (size[1]) {
+    assert((frame->tab.i < size[1]), 1);
+  }
+  else {
+    defer_as(1);
   }
 
-  frame->tab.reg[frame->tab.i] = (frame->stack.ev & __STACK_PUSH_LEFT)?
-    frame->stack.head->left.sym: frame->stack.head->right.sym;
+  struct lisp_sym_ret stret = lisp_symtab_get(frame->stack.typ.lex.hash);
 
-  ++frame->tab.i;
+  assert(stret.slave == 0, 1);
+  frame->tab.reg[frame->tab.i] = stret.master;
 
-done:
-  return ret;
+  done_for(ret);
 }
 
-// TODO: these
-
-int lisp_stack_frame(struct lisp_stack* stack) {
+// TODO: make the frame function check the grammar
+int lisp_stack_lex_frame(struct lisp_stack* stack) {
   int ret = 0;
 
-  struct lisp_frame frame = {
-    .stack    = *stack,
-    .tab.size = lisp_symtab_getsize(stack->head->left.sym),
-  };
+  struct lisp_frame frame;
 
-  struct lisp_symtab reg[frame.tab.size];
+  frame.stack  = *stack;
+  frame.tab.i  = 1;
+
+  // it's guaranteed that if we're calling this function,
+  // the first argument is expected to be a function
+  struct lisp_sym_ret stret = lisp_symtab_get(stack->typ.lex.hash);
+  struct lisp_sym* sym      = &stret.master;
+
+  struct lisp_sym reg[sym->size[0]];
+
+  frame.tab.reg = reg;
+
+  // appease the compiler by letting the memory be allocated beforehand,
+  // even though we know there's nothing here
+  assert(stret.slave == 0, 1);
+  // assert(sym->typ == __LISP_FUN, 1);
 
 yield:
-  stack->sexp_trans(stack);
-  enum lisp_stack_ev ev = stack->ev;
+  /** see if the root expr asked for literals. if so,
+      then ask for the lexer to send its tokens to
+      the SEXP tree
+  */
+  if (sym->litr[0] &&
+      (frame.tab.i >= sym->litr[0] &&
+       (sym->litr[1] == -1 || frame.tab.i <= sym->litr[1]))) {
+    frame.stack.ev |= __STACK_LIT;
+    assert(FRAME_LEXER(frame) (&frame.stack) == 0, 1);
+    assert(lisp_stack_lex_frame_var(&frame, sym) == 0, 1);
+    ++frame.tab.i;
+    goto yield;
+  }
+  else {
+    assert(FRAME_LEXER(frame) (&frame.stack) == 0, 1);
+    ++frame.tab.i;
+  }
+
+  enum lisp_stack_ev ev = frame.stack.ev;
 
   if (STACK_PUSHED_VAR(ev)) {
-push_var:
-    assert(lisp_stack_sexp_frame_var(stack, &frame), 1);
-    goto yield;
+    frame.stack.ev &= ~__STACK_PUSHED_VAR;
+    // assert(lisp_stack_lex_frame_var(&frame, sym) == 0, 1);
+
+    if (STACK_POPPED(ev)) {
+      goto close_pop;
+    }
+    else {
+      goto yield;
+    }
   }
 
   else if (STACK_PUSHED_FUNC(ev)) {
-    /** in the case of a `quot'-like function, any
-        GEXP ::= {SEXP | LEXP | SYM | <-} may return
-        as literal, which means that something like:
+    assert(lisp_stack_lex_frame(&frame.stack) == 0, 1);
+    frame.stack.ev &= ~__STACK_PUSHED_FUNC;
 
-                    (quot (not-a-function))
-
-        shouldn't push `not-a-function' to the stack,
-        just return its GEXP
-     */
-    if (STACK_QUOT(stack->ev)) {
-      goto push_var;
-    }
-
-    if (stack->fun) {
-      assert(lisp_stack_frame(stack), 1);
-      assert(lisp_stack_frame_var(stack, &frame), 1);
-      goto yield;
-    }
-    else {
-      defer_as(1);
-    }
+    // TODO: i think this is wrong. the `frame_var' function
+    // should be dealing with objects in the symbol table already
+    assert(lisp_stack_lex_frame_var(&frame, sym) == 0, 1);
+    goto yield;
   }
 
   else if (STACK_POPPED(ev)) {
-    // NOTE: it's the job of `::fun' to set up the
-    // `stack' variable to correctly give in the
-    // `symtab' values for `lisp_stack_frame_var'
-    assert(stack->fun(stack), 1);
+close_pop:
+    frame.stack.ev &= ~__STACK_POPPED;
+    assert(
+      ((lisp_fun) sym->dat) (&frame) == 0, 1);
   }
 
   done_for(ret);
 }
-  }
+/** LEX stack: END */
 
-  assert(varp > 0, 1);
-  done_for(ret);
-}
-// LEX stack: END
+////////////////////////////////////////////////////////////

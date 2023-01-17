@@ -4,13 +4,13 @@ all: libvsl.a
 -include make/Objects.mk
 -include make/Libraries.mk
 
-MAKEFILES:=					\
-	make/Flags.mk			\
-	make/Objects.mk		\
-	make/Targets.mk		\
+MAKEFILES:=         \
+	make/Flags.mk     \
+	make/Objects.mk   \
+	make/Targets.mk   \
 	make/Libraries.mk \
-	make/Autodep.mk		\
-	make/Deps.mk			\
+	make/Autodep.mk   \
+	make/Deps.mk      \
 	make/Objects.in
 
 PRE_SRC:=lisp.c

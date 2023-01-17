@@ -22,9 +22,9 @@ enum sexp_t {
   __SEXP_LEFT_SYM    = BIT(7),
   __SEXP_RIGHT_SYM   = BIT(8),
 
-  __SEXP_LEFT_EMPTY  = BIT(9),
-  __SEXP_RIGHT_EMPTY = BIT(10),
-  __SEXP_SELF_EMPTY  = BIT(11),
+  __SEXP_SELF_EMPTY  = BIT(9),
+  __SEXP_LEFT_EMPTY  = BIT(10),
+  __SEXP_RIGHT_EMPTY = BIT(11),
 };
 
 #  define CHILD       (-0)
@@ -40,8 +40,8 @@ struct pos_t {
 };
 
 union node_t {
-  struct lisp_symtab sym;
-  struct pos_t       pos;
+  struct lisp_hash sym;
+  struct pos_t     pos;
 };
 
 struct lisp_sexp {
@@ -68,7 +68,7 @@ struct lisp_sexp {
   enum sexp_t  t;
 };
 
-extern struct lisp_sexp* root;
+int sexp_init(void);
 
 #endif
 
@@ -91,5 +91,10 @@ extern struct lisp_sexp* root;
 #  endif
 
 #  include "pool.h"
+
+void lisp_sexp_sym(POOL_T** mpp, struct lisp_hash hash);
+void lisp_sexp_end(POOL_T* mpp);
+void lisp_sexp_node_add(POOL_T** mpp);
+int  lisp_sexp_eval(POOL_T* mpp);
 
 #endif
