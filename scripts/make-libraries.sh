@@ -21,7 +21,7 @@ echo '[ .. ] Generating libraries'
 [[ -z $SED ]] && SED=sed
 
 echo "[ == ] $M4 make/Libraries.m4 > make/Libaries.mk"
-eval "$M4 $M4FLAGS make/Libraries.m4 > make/Libraries.mk"
+eval "$M4 $M4FLAGS make/Libraries.m4" > make/Libraries.mk
 
 echo "[ == ] cat make/Libraries.m4 | $SED >> make/Libaries.mk"
 eval "$M4 $M4FLAGS make/Libraries.m4" |\
