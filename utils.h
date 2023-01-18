@@ -137,6 +137,8 @@
 #  define BIT(x) (1 << (x))
 #  define MSG(x) \
   x, ((sizeof(x)/sizeof(char)) - 1)
+#  define STRING(x) \
+  {MSG(x "\n")}
 
 typedef unsigned char  bool, uchar;
 typedef unsigned short ushort;

@@ -3,6 +3,7 @@
 #include "debug.h"
 #include "stack.h" // includes `sexp.h'
 #include "lex.h"   // includes `symtab.h'
+#include "err.h"
 
 #undef LOCK_POOL_THREAD
 
@@ -50,7 +51,7 @@ lisp_lex_ev(struct lisp_lex lex, enum lisp_lex_ev ev) {
       --lex.master.paren;
     }
     else {
-      defer_for_as(lex.slave, 1);
+      defer_for_as(lex.slave, err(EIMBALANCED));
     }
 
     // if (!lex.master.paren) {
@@ -67,7 +68,7 @@ lisp_lex_whitespace(struct lisp_lex lex) {
     inc_hash_done();
     lex = lisp_lex_ev(lex, __LISP_SYMBOL_OUT);
 
-    assert_for(lex.slave == 0, 1, lex.slave);
+    assert_for(lex.slave == 0, OR_ERR(), lex.slave);
   }
 
   done_for(lex);
@@ -128,7 +129,7 @@ feed:
       break;
     }
 
-    assert(lex.slave == 0, 1);
+    assert(lex.slave == 0, OR_ERR());
 
     enum lisp_lex_ev ev = lex.master.ev;
 
@@ -152,7 +153,7 @@ feed:
          to communicate with its parents
       */
       if (prime) {
-        defer_as(1);
+        defer_as(err(ENOHASHCHANGING));
       }
       else {
         prime      = true;
@@ -236,7 +237,7 @@ close_pop:
   // for more bytes
   if (lex.master.paren || (lex.master.ev & __LISP_SYMBOL_IN)) {
     lex.master.ev |= __LISP_FEED;
-    assert(parse_bytstream_base(stack) == 0, 1);
+    assert(parse_bytstream_base(stack) == 0, OR_ERR());
     goto feed;
   }
 
@@ -251,7 +252,7 @@ feed:
   lex.master.size = read(iofd, iobuf, IOBLOCK);
   lex.master.cb_i = 0;
 
-  assert(lex.master.size != -1, 1);
+  assert(lex.master.size != -1, err(EREAD));
 
   /** lexer exited with `feed' callback:
         immediately exit successfully, let lexer
@@ -262,7 +263,7 @@ feed:
   }
 
   // feed `iobuf' to the lexer, listen for callbacks
-  assert(lisp_lex_bytstream(stack) == 0, 1);
+  assert(lisp_lex_bytstream(stack) == 0, OR_ERR());
 
   /** NOTE: these are the only callbacks issued by `lisp_lex_bytstream'
             that `parse_bytstream_base' can handle, the rest are handled
@@ -276,14 +277,14 @@ feed:
     DB_MSG("TODO: implement top level symbol resolution");
   }
 
-  // if none of these callbacks made it, we're probably fucked.
-  // check `paren's just in case. Also NOTE:
+  assert(lex.slave == 0, OR_ERR());
+
   //   the very special case of `()' as the only input passes
   //   all checks and exists without error, but also doesn't
   //   execute anything. It sets `__STACK_EMPTY' which would
   //   be used by the `frame' functions, but no such frame
   //   exists yet
-  assert(lex.slave == 0 && lex.master.paren == 0, 1);
+  assert(lex.master.paren == 0, err(EIMBALANCED));
 
   if (lex.master.size) {
     stack->ev     = 0;
