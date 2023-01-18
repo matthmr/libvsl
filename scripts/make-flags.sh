@@ -21,7 +21,7 @@ INCLUDE=''
 
 # look for include flags: `[+/-]debug -> CFLAGS += -[D/U]DEBUG'
 DEBUG=$(echo "$M4FLAGS" | grep -o "M4FLAG_include_DEBUG=.")
-DEBUG_STATE=$(echo $DEBUG | sed -z 's/M4FLAG_include_DEBUG=\(.\)/\1/g')
+DEBUG_STATE=$(echo "$DEBUG" | sed -z 's/M4FLAG_include_DEBUG=\(.\)/\1/g')
 
 if [[ $DEBUG_STATE = '1' ]]; then
   INCLUDE+='CFLAGS += -DDEBUG'
@@ -30,8 +30,6 @@ elif [[ $DEBUG_STATE = '0' ]]; then
 fi
 
 eval "$M4 $M4FLAGS make/Flags.m4" > make/Flags.mk
-# an `eval' is needed because of the quotes inside the arguments of some
-# of the macros
 
 echo "$INCLUDE" >> make/Flags.mk
 

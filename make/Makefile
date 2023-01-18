@@ -7,14 +7,14 @@ all: libvsl.a
 MAKEFILES:=         \
 	make/Flags.mk     \
 	make/Objects.mk   \
-	make/Targets.mk   \
 	make/Libraries.mk \
-	make/Autodep.mk   \
-	make/Deps.mk      \
-	make/Objects.in
+	make/Deps.mk
 
 PRE_SRC:=lisp.c
 PRE_BIN:=lisp
+
+CGEN_SRC:=primtab.c
+CGEN_BIN:=primtab
 
 TARGETS:=prevsl $(PRE_BIN)
 
@@ -31,7 +31,7 @@ ifndef $(PRE)
 	@echo "[ !! ] Missing \`PRE'. Did you set it in \`./configure'?"
 	@exit 1
 endif
-	@echo "PREVSL" $(PRE)
+	@echo "PREVSL " $(PRE)
 	@./prevsl < $(PRE) > $(PRE_SRC) || exit 1
 	@echo "CC lisp"
 	@$(CC) -c $(CFLAGS) $(CFLAGSADD) -o $(PRE_BIN) -L. -lvsl $(PRE_SRC)
@@ -60,12 +60,13 @@ tags:
 
 help:
 	@echo -e "\
-make: makes the current dependency of \`all'\n\
+make: makes the current dependency of \`all' (libvsl.a)\n\
 make lisp PRE=<vsl-file> makes the lisp, with \`PRE' as the pvsl file.\n\
                          \`PRE' can also be defined at \`./configure' time\n\
 make clean-obj: cleans objects files\n\
 make clean-tags: cleans tags\n\
-make clean-make: cleans targets\n\
+make clean-targets: cleans targets\n\
+make clean-make: cleans makefiles\n\
 make clean: cleans all"
 
 .PHONY: clean clean-tags clean-obj clean-targets clean-make \

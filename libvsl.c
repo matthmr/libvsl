@@ -12,15 +12,10 @@ int main(void) {
   sexp_init();
 
   if (frontend) {
-    assert(frontend() == 0, 1);
+    assert(frontend() == 0, err(EFRONTEND));
   }
 
-  // TODO: verbose error messages
-  assert_exec(
-    parse_bytstream(STDIN_FILENO), 1,
-    //err(ELIBVSLGEN)
-    write(STDERR_FILENO,
-          MSG("[ !! ] libvsl: error while parsing file\n")));
+  assert(parse_bytstream(STDIN_FILENO) == 0, OR_ERR());
 
   done_for(ret);
 }

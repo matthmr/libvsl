@@ -1,7 +1,7 @@
 #ifndef LOCK_LIBVSL
 #  define LOCK_LIBVSL
 
-#  include "utils.h"
+#  include "err.h"
 
 typedef int (*Frontend)(void);
 extern Frontend frontend;

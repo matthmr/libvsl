@@ -1,4 +1,5 @@
 #include "stack.h"
+#include "err.h"
 
 ////////////////////////////////////////////////////////////
 
@@ -61,15 +62,15 @@ lisp_stack_lex_frame_var(struct lisp_frame* frame,
   uint* size = sym->size;
 
   if (size[1]) {
-    assert((frame->tab.i < size[1]), 1);
+    assert((frame->tab.i < size[1]), err(EARGTOOBIG));
   }
-  else {
-    defer_as(1);
+  else if (size[0] == 0) {
+    defer_as(err(EARGTOOBIG));
   }
 
   struct lisp_sym_ret stret = lisp_symtab_get(frame->stack.typ.lex.hash);
 
-  assert(stret.slave == 0, 1);
+  assert(stret.slave == 0, OR_ERR());
   frame->tab.reg[frame->tab.i] = stret.master;
 
   done_for(ret);
@@ -95,8 +96,9 @@ int lisp_stack_lex_frame(struct lisp_stack* stack) {
 
   // appease the compiler by letting the memory be allocated beforehand,
   // even though we know there's nothing here
-  assert(stret.slave == 0, 1);
-  // assert(sym->typ == __LISP_FUN, 1);
+  assert(stret.slave == 0, OR_ERR());
+  assert(sym->typ == __LISP_FUN && sym->dat != NULL,
+         err(EISNOTFUNC));
 
 yield:
   /** see if the root expr asked for literals. if so,
@@ -107,13 +109,13 @@ yield:
       (frame.tab.i >= sym->litr[0] &&
        (sym->litr[1] == -1 || frame.tab.i <= sym->litr[1]))) {
     frame.stack.ev |= __STACK_LIT;
-    assert(FRAME_LEXER(frame) (&frame.stack) == 0, 1);
-    assert(lisp_stack_lex_frame_var(&frame, sym) == 0, 1);
+    assert(FRAME_LEXER(frame) (&frame.stack) == 0, OR_ERR());
+    assert(lisp_stack_lex_frame_var(&frame, sym) == 0, OR_ERR());
     ++frame.tab.i;
     goto yield;
   }
   else {
-    assert(FRAME_LEXER(frame) (&frame.stack) == 0, 1);
+    assert(FRAME_LEXER(frame) (&frame.stack) == 0, OR_ERR());
     ++frame.tab.i;
   }
 
@@ -132,12 +134,12 @@ yield:
   }
 
   else if (STACK_PUSHED_FUNC(ev)) {
-    assert(lisp_stack_lex_frame(&frame.stack) == 0, 1);
+    assert(lisp_stack_lex_frame(&frame.stack) == 0, OR_ERR());
     frame.stack.ev &= ~__STACK_PUSHED_FUNC;
 
     // TODO: i think this is wrong. the `frame_var' function
     // should be dealing with objects in the symbol table already
-    assert(lisp_stack_lex_frame_var(&frame, sym) == 0, 1);
+    assert(lisp_stack_lex_frame_var(&frame, sym) == 0, OR_ERR());
     goto yield;
   }
 
@@ -145,7 +147,7 @@ yield:
 close_pop:
     frame.stack.ev &= ~__STACK_POPPED;
     assert(
-      ((lisp_fun) sym->dat) (&frame) == 0, 1);
+      ((lisp_fun) sym->dat) (&frame) == 0, OR_ERR());
   }
 
   done_for(ret);

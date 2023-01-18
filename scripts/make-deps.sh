@@ -20,11 +20,10 @@ echo '[ .. ] Generating dependencies'
 [[ -z $SED ]] && SED=sed
 
 # fix-up for local development branch: all test files have `-test' prefix
-echo "[ == ] $CC -MM > make/Autodep.mk"
-find . -name '*.c' -and -not -name '*-test*' -type f | xargs $CC -MM > make/Autodep.mk
-
-# fix up files in nested directories: put the first source on base
-echo "[ == ] awk make/Autodep.mk > make/Deps.mk"
+# fix-up files in nested directories: put the first source on base
+echo "[ == ] $CC -MM | awk > make/Deps.mk"
+find . -name '*.c' -and -not -name '*-test*' -type f |\
+  xargs $CC -MM |\
 awk '
 $2 ~ /.*\/.*/ {
   basedir=$2
@@ -34,7 +33,7 @@ $2 ~ /.*\/.*/ {
 }
 {
   print
-}' make/Autodep.mk > make/Deps.mk
+}' > make/Deps.mk
 
 # create the `OBJECTS' variable
 echo "[ == ] cat make/Deps.mk | $SED >> make/deps.mk"
@@ -44,9 +43,12 @@ cat make/Deps.mk  |\
   $SED 's: $:\n:' |\
   $SED -e 's/^/OBJECTS:=&/' >> make/Deps.mk
 
+echo '[ .. ] Generating objects'
+
+echo "[ == ] awk make/Deps.mk | $M4 make/Objects.m4 | $SED | awk > make/Objects.mk"
+
 # set up future template for `make-makefile':
 #  - replace `/' with `I' for the objects for the M4FLAGs
-echo "[ == ] awk > make/Deps.mk > make/Objects.in"
 awk -F: '
 BEGIN {
   cmsg="";
@@ -65,16 +67,34 @@ BEGIN {
     sub(/\//, "I", base_include);
   }
 
+  ocmd = "M4FLAG_override_" base_include;
   cmsg = "@echo \"CC " base ".c\"";
   ccmd = "@$(CC) -c M4FLAG_include_" base_include " $(CFLAGS) $(CFLAGSADD) $< -o $@";
-  printf "%s\n\t%s\n\t%s\n", $0, cmsg, ccmd;
+  printf "%s\n\t%s\n\t%s\n\t%s\n", $0, ocmd, cmsg, ccmd;
 }
-' make/Deps.mk > make/Objects.in
-
-echo '[ .. ] Generating objects'
-
-# Resolve include flags, clean unused ones
-echo "[ == ] $M4 $M4FLAGS make/Include.m4 | $SED > make/Objects.mk"
-eval "$M4 $M4FLAGS make/Include.m4" | $SED 's/M4FLAG_include_[A-Za-z]*/ /g' > make/Objects.mk
+' make/Deps.mk |\
+  eval "$M4 $M4FLAGS make/Objects.m4" /dev/stdin     |\
+    $SED -e 's/M4FLAG_include_[0-9A-Za-z_]*/ /g'      \
+         -e 's/M4FLAG_override_[0-9A-Za-z_]*/ /g'    |\
+      awk '
+BEGIN {
+  del=0;
+}
+/^[ 	]*$/ {
+  next;
+}
+/M4FLAG_DELETE_ME/ {
+  del=2;
+  next;
+}
+{
+  if (del > 0) {
+    del -= 1;
+    next;
+  }
+}
+{
+  print;
+}' > make/Objects.mk
 
 echo '[ OK ] make-deps.sh: Done'
