@@ -12,6 +12,10 @@ make/*.in
 lisp.c
 lisp*
 
+# Cgen
+prim.c
+primtab
+
 # Dev
 dev/
 TAGS

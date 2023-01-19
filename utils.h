@@ -135,23 +135,48 @@
 #  endif
 
 #  define BIT(x) (1 << (x))
+
 #  define MSG(x) \
   x, ((sizeof(x)/sizeof(char)) - 1)
+
+#  define LINE(x) \
+  x "\n"
+
 #  define STRING(x) \
-  {MSG(x "\n")}
+  {MSG(LINE(x))}
 
 typedef unsigned char  bool, uchar;
 typedef unsigned short ushort;
 typedef unsigned int   uint;
 typedef unsigned long  ulong;
 
-struct __string {
+struct string_s {
   const char* _;
   const uint  size;
 };
 
-typedef struct __string string;
+typedef struct string_s string_s;
 
 /** GENERIC UTILS: END */
+
+/** STRING UTILS: BEGIN */
+
+#  ifdef PROVIDE_INC_STRING
+#    define PROVIDE_INC_STRING
+struct string_i;
+typedef struct string_i string_i;
+#  endif
+
+#  define INC_STRING(am) \
+  struct string_i {      \
+    char string[am];     \
+    uint size;           \
+    uint idx;            \
+  }
+
+#  define ITOA(x) \
+  (x) + 0x30
+
+/** STRING UTILS: END */
 
 #endif

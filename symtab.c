@@ -1,11 +1,12 @@
 #include "symtab.h"
+#include "err.h"
 
 // TODO: ensure that the hash algorithm doesn't trigger false positives
 // TODO: implement lexical scoping
 
 static uint hash_i = 0;
 
-static POOL_T symtab[SYMTAB_PRIM];
+//static POOL_T symtab[SYMTAB_PRIM];
 
 static inline void pool_clean(POOL_T* pp) {
   return;
@@ -31,7 +32,7 @@ struct lisp_hash_ret inc_hash(struct lisp_hash hash, char c) {
       up to 9409 characters
    */
   if (hash.len > SYMTAB_MAX_SYM) {
-    defer_for_as(hash_ret.slave, 1);
+    defer_for_as(hash_ret.slave, err(EIDTOOBIG));
   }
 
   if (pre_mod && post_mod) {
@@ -57,22 +58,22 @@ void hash_done(struct lisp_hash* hash) {
 }
 
 // TODO: stub
-void str_hash(struct clisp_sym* tab) {
-  // struct lisp_sym_ret tab_ret;
-  // const char* str = tab->str;
+struct lisp_hash_ret str_hash(const char* str) {
+  struct lisp_hash_ret hash_ret = {
+    .master = {0},
+    .slave  = 0,
+  };
 
-  // for (uint i = 0;; ++i) {
-  //   char c = str[i];
+  for (uint i = 0;; ++i) {
+    char c = str[i];
 
-  //   tab_ret = inc_hash(tab_ret.master, c);
+    if (!c || (hash_ret = inc_hash(hash_ret.master, c)).slave != 0) {
+      break;
+    }
+  }
 
-  //   if (!c) {
-  //     break;
-  //   }
-  // }
-
-  // inc_hash_done();
-  // tab->tab = tab_ret.master;
+  inc_hash_done();
+  done_for(hash_ret);
 }
 
 // TODO: the functions below are stubs

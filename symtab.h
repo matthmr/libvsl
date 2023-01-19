@@ -79,16 +79,17 @@ struct lisp_sym_ret {
 };
 
 struct clisp_sym {
-  const char* str;
+  const char* str; /** @str: the C-string representation of the symbol   */
+  const char* fun; /** @fun: the C-string representation of the function */
 
-  /** @tab: will be filled at runtime via the `frontend' function */
+  /** @tab: will be filled at runtime via the `frontend' function        */
   struct lisp_sym sym;
 };
 
 struct lisp_hash_ret inc_hash(struct lisp_hash hash, char c);
+struct lisp_hash_ret str_hash(const char* str);
 void inc_hash_done(void);
 void hash_done(struct lisp_hash* hash);
-void str_hash(struct clisp_sym* ctab);
 
 struct lisp_sym_ret lisp_symtab_set(struct lisp_hash hash);
 struct lisp_sym_ret lisp_symtab_get(struct lisp_hash hash);

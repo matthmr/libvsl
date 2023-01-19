@@ -3,9 +3,10 @@
 // TODO: make this more verbose
 // TODO: make this optional
 
+#include "utils.h"
 #include "err.h"
 
-static const string emsg[] = {
+static const string_s emsg[] = {
   [EIMBALANCED]     = ERR_STRING("lexer", "imbalanced parens"),
   [EREAD]           = ERR_STRING("libvsl", "error while reading file"),
   [EFRONTEND]       = ERR_STRING("libvsl", "frontend error"),
@@ -14,6 +15,7 @@ static const string emsg[] = {
   [EISNOTFUNC]      = ERR_STRING("libvsl", "symbol is not function"),
   [ENOHASHCHANGING] =
     ERR_STRING("libvsl", "hash-changing functions are not allowed"),
+  [EIDTOOBIG]       = ERR_STRING("libvsl", "identifier is too big"),
 };
 
 /** for now, this function is only called once and the entire
@@ -26,7 +28,13 @@ int err(enum ecode ecode) {
   if (!did_msg) {
     did_msg = true;
     pecode  = ecode;
-    write(STDERR_FILENO, emsg[ecode]._, emsg[ecode].size);
+
+    /** we can still use the `err' module to backwards-comply with
+        frontend implementations that don't; they just have to error
+        with the `ERROR' macro and `err' will work normally */
+    if (ecode <= ECODE_LEN) {
+      write(STDERR_FILENO, emsg[ecode]._, emsg[ecode].size);
+    }
   }
 
   return (int) pecode;
