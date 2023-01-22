@@ -88,7 +88,7 @@ lisp_lex_csym(struct lisp_lex lex, char c) {
     lex.slave       = ret.slave;
   }
 
-  DB_FMT("vslisp: character (%c) (0x%x)", c, hash.sum);
+  DB_FMT("vslisp: character (%c) (0x%x)", c, lex.master.hash.sum);
 
   done_for(lex);
 }
