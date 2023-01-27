@@ -1,15 +1,13 @@
 #include "debug.h"
-#include "stack.h" // includes `sexp.h'
-
-#undef LOCK_POOL_DEF
-#undef LOCK_POOL_THREAD
+#include "stack.h" // also includes `sexp.h'
 
 // TODO: the tree going to become a generic memory pool
 // because the lexer can now send callbacks directly to
 // the stack
 
-// `stack.h' locks the pool definition,
-// so we have to include `pool.h' again
+#undef LOCK_POOL_DEF
+#undef LOCK_POOL_THREAD
+
 #include "pool.h"
 
 static struct lisp_sexp* head = NULL;

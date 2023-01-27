@@ -3,28 +3,21 @@ all: libvsl.a
 -include make/Flags.mk
 -include make/Objects.mk
 -include make/Libraries.mk
+-include make/Targets.mk
+-include make/Cgen.mk
 
 MAKEFILES:=         \
 	make/Flags.mk     \
 	make/Objects.mk   \
 	make/Libraries.mk \
+	make/Targets.mk   \
+	make/Cgen.mk      \
 	make/Deps.mk
 
 PRE_SRC:=lisp.c
 PRE_BIN:=lisp
 
-CGEN_SRC:=primtab.c
-CGEN_BIN:=primtab
-
-TARGETS:=prevsl $(PRE_BIN)
-
-$(LIBRARIES):
-	@echo "AR" $@
-	@$(AR) crUv$(ARFLAGS) $@ $?
-
-prevsl:
-	@echo "CC" $@
-	@$(CC) $(CFLAGS) $(CFLAGSADD) -L. -lvsl $< -o $@
+TARGETS += $(PRE_BIN)
 
 $(PRE_BIN): prevsl $(PRE)
 ifndef $(PRE)
@@ -39,6 +32,10 @@ endif
 clean-obj:
 	@echo "RM " $(OBJECTS)
 	@rm -rfv $(OBJECTS)
+
+clean-cgen:
+	@echo "RM " $(CGEN_SRC) $(CGEN_BIN)
+	@rm -rfv $(CGEN_SRC) $(CGEN_BIN)
 
 clean-targets:
 	@echo "RM " $(TARGETS) $(LIBRARIES) $(PRE_SRC)
@@ -66,6 +63,7 @@ make lisp PRE=<vsl-file> makes the lisp, with \`PRE' as the pvsl file.\n\
 make clean-obj: cleans objects files\n\
 make clean-tags: cleans tags\n\
 make clean-targets: cleans targets\n\
+make clean-cgen: cleans auto-generated C files and programs\n\
 make clean-make: cleans makefiles\n\
 make clean: cleans all"
 

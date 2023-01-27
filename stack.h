@@ -29,7 +29,8 @@ enum lisp_stack_ev {
   __STACK_PUSH_FUNC  = BIT(4), /** for both */
 
   __STACK_LIT        = BIT(5), /** for both */
-  __STACK_EMPTY      = BIT(6), /** for LEX  */
+  __STACK_SYM        = BIT(6), /** for LEX */
+  __STACK_EMPTY      = BIT(7), /** for LEX  */
 };
 
 #  define __STACK_QUOT (__STACK_LIT)

@@ -1,63 +1,15 @@
 // prevsl: symbolic implementation of `libvsl';
 //         can be bootstrapped
 
-//#include "libvsl.h" // <- TODO: stub
+#include "libvsl.h"
 //#include "prim.h"
 
 #define CLISP(x) \
   static int clisp_##x
 
-static struct clisp_symtab clisp_symtab[] = {
-  // primitive functions
-  {
-    .str  = "set", .hash = {.typ = __LISP_FUNC, .dat.func = NULL}, // = clisp_set,
-  },
-  {
-    .str = "func", .hash = {.typ = __LISP_FUNC, .dat.func = NULL}, // = clisp_func,
-  },
-  {
-    .str = "eval", .hash = {.typ = __LISP_FUNC, .dat.func = NULL}, // = clisp_eval,
-  },
-  {
-    .str = "quot", .hash = {.typ = __LISP_FUNC, .dat.func = NULL}, // = clisp_quot,
-  },
-  {
-    .str = "if", .hash = {.typ = __LISP_FUNC, .dat.func = NULL}, // = clisp_if,
-  },
-  {
-    .str = "while", .hash = {.typ = __LISP_FUNC, .dat.func = NULL}, // = clisp_while,
-  },
-  {
-    .str = "break", .hash = {.typ = __LISP_FUNC, .dat.func = NULL}, // = clisp_br,
-  },
-  {
-    .str = "continue", .hash = {.typ = __LISP_FUNC, .dat.func = NULL}, // = clisp_cont,
-  },
+static struct clisp_symtab clisp_symtab[] = {};
 
-  // list-like functions
-  {
-    .str = "no-head", .hash = {.typ = __LISP_FUNC, .dat.func = NULL}, // = clisp_nhead,
-  },
-  {
-    .str = "head", .hash = {.typ = __LISP_FUNC, .dat.func = NULL}, // = clisp_head,
-  },
-  {
-    .str = "cat", .hash = {.typ = __LISP_FUNC, .dat.func = NULL}, // = clisp_cat,
-  },
-
-  // primitive symbols
-  {
-    .str = "t", .hash = {0}, // = clisp_t,
-  },
-  {
-    .str = "nil", .hash = {0}, // = clisp_nil,
-  },
-
-  // EOL
-  {0},
-};
-
-// TODO: this
+// TODO: these
 static int compile_grammar(void) {
   return 0;
 }
@@ -73,16 +25,17 @@ static int compile_prim(void) {
     if (stab->str) {
       // compile the hash for the table entry
       assert_exec(
-        str_hash(stab), 1,
+        str_hash(stab), ERROR,
         write(STDERR_FILENO,
-              MSG("[ !! ] prevsl: compiler error while parsing source\n")));
+              ERR_STRING("prevsl", "compiler error while parsing source")));
 
       // add the entry to the symbol table
       assert_exec(
-        lisp_symtab_add(stab->hash, stab->grammar), 1,
+        lisp_symtab_add(stab->hash, stab->grammar), ERROR,
         write(STDERR_FILENO,
-              MSG("[ !! ] prevsl: compiler error while parsing source\n"
-                  "  - could not enter item to the symbol table\n")));
+              ERR_STRING(\
+                "prevsl", "compiler error while parsing source\n" \
+                          "  - could not enter item to the symbol table")));
       }
 
       continue;
@@ -98,10 +51,10 @@ static int compile_prim(void) {
 static int prevsl(void) {
   int ret = 0;
 
-  assert(compile_grammar() == 0, 1);
-  assert(compile_prim() == 0, 1);
+  assert(compile_grammar() == 0, OR_ERR());
+  assert(compile_prim() == 0, OR_ERR());
 
   done_for(ret);
 }
 
-VSL_FRONTEND(prevsl);
+LIBVSL_FRONTEND(prevsl);

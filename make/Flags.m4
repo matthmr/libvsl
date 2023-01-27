@@ -1,16 +1,28 @@
-include(make/m4/Defaults.m4)dnl
-define(makeflagdef, `$1:=M4FLAG_conf_$1')dnl
-define(makeflagchange, `$1?=M4FLAG_conf_$1')dnl
-define(incmakeflagdef, `$1:=M4FLAG_include_$1')dnl
-define(incmakeflagchange, `$1?=M4FLAG_include_$1')dnl
-dnl
-makeflagdef(`CC')
-makeflagdef(`CFLAGS')
-makeflagdef(`ARFLAGS')
-makeflagchange(`CFLAGSADD')
-makeflagchange(`PRE')
-dnl
-undefine(`makeflag')dnl
-undefine(`makeflagchange')dnl
-undefine(`incmakeflag')dnl
-undefine(`incmakeflagchange')dnl
+define(`makeflagdef',
+`ifdef(`M4FLAG_conf_$1',, `define(`M4FLAG_conf_$1', `$2')')'
+`$1:=M4FLAG_conf_$1')dnl
+
+define(`makeflagchange',
+`ifdef(`M4FLAG_conf_$1',, `define(`M4FLAG_conf_$1', `$2')')'
+`$1?=M4FLAG_conf_$1')dnl
+
+define(`incmakeflagdef',
+`ifdef(`M4FLAG_include_$1',, `define(`M4FLAG_include_$1', `$2')')'
+`$1:=M4FLAG_include_$1')dnl
+
+define(`incmakeflagchange',
+`ifdef(`M4FLAG_include_$1',, `define(`M4FLAG_include_$1', `$2')')'
+`$1?=M4FLAG_include_$1')dnl
+
+makeflagdef(`CC', `cc')
+makeflagdef(`CFLAGS', `-Wall')
+makeflagchange(`CFLAGSADD', `')
+makeflagdef(`AR', `ar')
+makeflagdef(`ARFLAGS', `')
+makeflagchange(`PRE_SRC', `')
+makeflagchange(`PRE_PVSL', `')
+
+undefine(`makeflag')
+undefine(`makeflagchange')
+undefine(`incmakeflag')
+undefine(`incmakeflagchange')

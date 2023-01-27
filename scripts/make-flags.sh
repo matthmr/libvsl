@@ -33,4 +33,4 @@ eval "$M4 $M4FLAGS make/Flags.m4" > make/Flags.mk
 
 echo "$INCLUDE" >> make/Flags.mk
 
-echo "[ OK ] make-flags.sh: Done"
+echo "[ OK ] scripts/make-flags.sh: Done"

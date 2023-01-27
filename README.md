@@ -4,36 +4,10 @@ A very small implementation of lisp, nothing too fancy.
 
 ## Building
 
-Run `./configure` then `make libvsl` to compile the project.
+Run `./configure` then `make libvsl.a` to compile the project.
+Run `./configure --flags` to see all the flags available.
 
-`./configure` variables are:
-- `[+/-]debug`: generate verbose binaries (`-`)
-
-`make` variables are:
-
-- `CC` - the C compiler (`cc`)
-- `CFLAGS` - `CC` major flags (`-Wall`)
-- [1] `CFLAGSADD` - `CC` minor flags ()
-- `AR` - the ELF archiver (`ar`)
-- `ARFLAGS` - `AR` major flags
-- `PRE` - the *prevsl* source file that will make your lisp (read below)
-
-`make` variables are also `./configure` variables. Pass them with double dashes
-and lowercase, for example:
-
-```shell
-# make variable
-make CC=tcc CFLAGS=-O2 thing
-
-# ./configure variable
-./configure --cc=tcc --cflags=-O2 && make thing
-```
-
-See `./configure --help`.
-
-[1]: major flags are always passed to all targets at ./configure time, minor
-     flags are only passed at make time. This is a way to pass flags at make
-     time that don't intefere with ./configure time
+Run either `./configure --help` or `make help` or both for more info.
 
 ## Usage in other projects
 
@@ -53,27 +27,6 @@ before.
 
 If you've followed PREVSL's guidelines, you should have a fully
 functioning LISP by the end.
-
-# NOTE -- 20221226
-
-If you saw this source tree under commit `123c482a` or lower, you may notice
-that the repository had a stub around `main` on the `vslisp.c` file. That was
-because the main version of `vslisp` was just for debugging (and also `vslisp`
-was a compilable target), and `vlisp.c` could be made to forego `main` and
-become `libvsl`, with another file taking the role to host `main`.
-
-As of the date of this note, the project has become a pure template, with no
-stub around `main`. However the names of the files stay the same to avoid
-future merge conflicts (so sorry for the misleading names :))
-
-## TL;DR
-
-The project produces two binaries:
-
-- `prevsl`
-- `libvsl`
-
-Use the former to link to the latter.
 
 # License
 

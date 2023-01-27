@@ -1,14 +1,12 @@
 #include <unistd.h>
 
 #include "debug.h"
-#include "stack.h" // includes `sexp.h'
-#include "lex.h"   // includes `symtab.h'
+#include "stack.h" // also includes `sexp.h'
+#include "lex.h"   // also includes `symtab.h'
 #include "err.h"
 
 #undef LOCK_POOL_THREAD
 
-// `stack.h' locks the pool definition,
-// so we have to include `pool.h' again
 #include "pool.h"
 
 #define SEXP_POOLP POOLP
@@ -90,13 +88,12 @@ lisp_lex_csym(struct lisp_lex lex, char c) {
 
   DB_FMT("vslisp: character (%c) (0x%x)", c, lex.master.hash.sum);
 
+  // it's *very* unlikely `inc_hash' is going to error, but if it does,
+  // the user may be a bit puzzled as for why libvsl erroed, as it
+  // does not send an error message. let's call this an easteregg
   done_for(lex);
 }
 
-// TODO: this function should be able to switch and push to the sexp stack,
-// instead of directly to the stack
-// TODO: some `prime' checks are false positives; they should only trigger
-// if the outer scope says it's expecting normal functions
 static int lisp_lex_bytstream(struct lisp_stack* stack) {
   int  ret  = 0;
   uint size = 0;

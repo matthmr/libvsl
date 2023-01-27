@@ -2,18 +2,23 @@
 *.o
 *.so
 *.a
-prevsl
 
 # Make
 make/*.mk
 make/*.in
-
-# Pre
-lisp.c
-lisp*
+make/Cgen-obj.mk
 
 # Dev
 dev/
 TAGS
 tags
 cscope*
+
+# PREVSL
+lisp.c
+lisp
+prevsl
+
+# CGEN
+primtab.c
+primtab
