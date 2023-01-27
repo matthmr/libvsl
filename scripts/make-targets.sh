@@ -47,7 +47,7 @@ BEGIN {
   }
 
   cmsg = "@echo \"CC " base "\"";
-  ccmd = "@$(CC) M4FLAG_include_" base_include " $(CFLAGS) $(CFLAGSADD) " link " $< -o $@";
+  ccmd = "@$(CC) M4FLAG_include_" base_include " $(CFLAGS) $(CFLAGSADD) " link " $^ -o $@";
 
   printf "%s\n\t%s\n\t%s\n", $0, cmsg, ccmd;
   link="";

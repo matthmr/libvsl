@@ -6,6 +6,6 @@ target_link_local(`vsl')
 target_gen
 
 target(`primtab')
-target_obj(`cgen_primtab.o',
+target_obj(`cgen_primtab.o', `cgen.o',
 `symtab.o', `prim.o', `err.o')
 target_gen
