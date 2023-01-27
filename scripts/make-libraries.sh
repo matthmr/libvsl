@@ -9,7 +9,6 @@ case $1 in
 'Usage:       scripts/make-libraries.sh
 Description: Makes the libraries for the targets
 Variables:   M4=[m4-like command]
-             SED=[sed-like command]
 Note:        Make sure to call this script from the repository root'
     exit 1
     ;;
@@ -27,7 +26,12 @@ echo "[ == ] cat make/Libraries.m4 | $SED >> make/Libaries.mk"
 eval "$M4 $M4FLAGS make/Libraries.m4" |\
   cut -d: -f1                         |\
   tr '\n' ' '                         |\
-  $SED 's: $:\n:'                     |\
-  $SED -e 's/^/LIBRARIES:=&/g' >> make/Libraries.mk
+  sed 's: $:\n:'                     |\
+  sed -e 's/^/LIBRARIES:=&/g' >> make/Libraries.mk
 
-echo '[ OK ] make-libraries.sh: Done'
+echo '
+$(LIBRARIES):
+	@echo "AR" $@
+	@$(AR) crUv$(ARFLAGS) $@ $?' >> make/Libraries.mk
+
+echo '[ OK ] scripts/make-libraries.sh: Done'

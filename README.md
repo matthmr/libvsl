@@ -5,35 +5,9 @@ A very small implementation of lisp, nothing too fancy.
 ## Building
 
 Run `./configure` then `make libvsl.a` to compile the project.
+Run `./configure --flags` to see all the flags available.
 
-`./configure` variables are:
-- `[+/-]debug`: generate verbose binaries (`-`)
-
-`make` variables are:
-
-- `CC` - the C compiler (`cc`)
-- `CFLAGS` - `CC` major flags (`-Wall`)
-- [1] `CFLAGSADD` - `CC` minor flags ()
-- `AR` - the ELF archiver (`ar`)
-- `ARFLAGS` - `AR` major flags
-- `PRE` - the *prevsl* source file that will make your lisp (read below)
-
-`make` variables are also `./configure` variables. Pass them with double dashes
-and lowercase, for example:
-
-```shell
-# make variable
-make CC=tcc CFLAGS=-O2 thing
-
-# ./configure variable
-./configure --cc=tcc --cflags=-O2 && make thing
-```
-
-See `./configure --help`.
-
-[1]: major flags are always passed to all targets at `./configure` time, minor
-     flags are only passed at make time. This is a way to pass flags at make
-     time that don't intefere with `./configure` time
+Run either `./configure --help` or `make help` or both for more info.
 
 ## Usage in other projects
 

@@ -1,26 +1,31 @@
 #!/usr/bin/bash -e
 
 SET_FLAGS=(
-  'CC' 'CFLAGS' 'CFLAGSADD' 'ARFLAGS' 'PRE'
+  "CC" "M4" "CFLAGS" "CFLAGSADD" "ARFLAGS" "PRE"
 )
-SET_FLAG_PREFIX='M4FLAG_conf_'
+SET_FLAG_PREFIX="M4FLAG_conf_"
 
-INCLUDE_FLAGS=('DEBUG')
-INCLUDE_FLAG_PREFIX='M4FLAG_include_'
+INCLUDE_FLAGS=(
+  "DEBUG"
+)
+INCLUDE_FLAG_PREFIX="M4FLAG_include_"
 
 CALLEES=(
   "make-flags"
   "make-deps"
+  "make-targets"
   "make-libraries"
 )
 
 BUILDS_CALL=(
-  "M4=\"\$M4\" M4FLAGS=\"\$M4FLAGS\"     scripts/${CALLEES[0]}.sh"
+  "M4=\"\$M4\" M4FLAGS=\"\$M4FLAGS\" scripts/${CALLEES[0]}.sh"
 
-  "CC=\"\$CC\" SED=\"\$SED\" \
-   M4=\"\$M4\" M4FLAGS=\"\$M4FLAGS\"     scripts/${CALLEES[1]}.sh"
-  "SED=\"\$SED\" \
-   M4=\"\$M4\" M4FLAGS=\"\$M4FLAGS\"     scripts/${CALLEES[2]}.sh"
+  "CC=\"\$CC\" M4=\"\$M4\" \
+   M4FLAGS=\"\$M4FLAGS\"             scripts/${CALLEES[1]}.sh"
+
+  "M4=\"\$M4\" M4FLAGS=\"\$M4FLAGS\" scripts/${CALLEES[2]}.sh"
+
+  "M4=\"\$M4\" M4FLAGS=\"\$M4FLAGS\" scripts/${CALLEES[3]}.sh"
 )
 
 ################################################################################
@@ -33,45 +38,58 @@ function print_targets {
   done
 }
 
+function print_flags {
+  local len
+  len=${#SET_FLAGS[@]}
+
+  for ((i = 0; i < $len; i++))
+  do
+    echo "SetFlag[$((i+1))]: ${SET_FLAGS[$i],,}"
+  done
+
+  echo "=========="
+  len=${#INCLUDE_FLAGS[@]}
+
+  for ((i = 0; i < $len; i++))
+  do
+    echo "IncludeFlag[$((i+1))]: ${INCLUDE_FLAGS[$i],,}"
+  done
+}
+
 case $1 in
   '-h'|'--help')
-    printf "Usage:           ./configure [--help -h] [--targets -t] [--start=<level> --stop=<level>] [--only=<level>]
-Description:     Generate make scripts for \`vsl'
+    printf "Usage:         ./configure [--help|-h] [--targets|-t] [--flags|-f]
+                           [range]     [flags...]
+Description:   Generate make scripts for \`vsl'
 
-Variables:       CC=\"C compiler (used in ./configure)\"
-                 M4=\"m4-like command (used in ./configure)\"
+Range:          * [--start=<level_start> --stop=<level_stop>]:
+                  * the first target to run is the one at \`level_start' and the
+                    last is the one at \`level_stop'
+                * [--only=<level>]:
+                  * the only target to run is the one at \`level'
 
-Set flags:       --cc=, --cflags=, --cflagsadd=, --arflags=, --pre=
+Note:          Make sure to call this script from the repository root
+               Use @\"\"@ notation to pass in values that contain spaces in
+               them, for example:
 
-Include flags:   [+/-]debug
+                          ./configure --cc=clang --cflags=@\"-Wall -glldb\"@
 
-Note:            Make sure to call this script from the repository root
-                 Use @\"\"@ notation to pass in values that contain spaces in them, for example:
+               To get a list of targets, run:
 
-                             ./configure --cflags=@\"-Wall -glldb\"@ --cc=clang
+                                 ./configure --targets
 
-Targets:         To bound the build step, pass in \`--start=<level>' and/or \`--stop=<level>' as the FIRST
-                 and SECOND argument of the ./configure file. The order doesn't matter.
-                 For example, to skip everything after the first target exclusively, you'd run:
+               To get a list of flags, run:
 
-                                          ./configure --stop=1
-
-                 To skip everything before the third target exclusively, you'd run:
-
-                                          ./configure --start=3
-
-                 To execute only one target pass in \`--only=<level>'
-
-                 To get a list of targets, run:
-
-                                          ./configure --targets
-
-Run \`make help' to get an explanation of set- and include- flags
+                                  ./configure --flags
 "
     exit 1
     ;;
   '-t'|'--targets')
     print_targets
+    exit 1
+    ;;
+  '-f'|'--flags')
+    print_flags
     exit 1
     ;;
 esac
@@ -212,6 +230,7 @@ function parse_flags {
   for flag in $can_flags
   do
 
+   #################### CLOSING `@' ####################
     if [[ $promise_closing = 'yes' ]]
     then
       if [[ ${flag:(-1)} = '@' ]] # add to previous entry, then close promise
@@ -226,6 +245,7 @@ function parse_flags {
       fi
     fi
 
+   #################### DOUBLE DASH ####################
     if [[ ${flag:0:2} = '--' ]] # probably setting a set-flag
     then
 
@@ -259,6 +279,12 @@ function parse_flags {
 
       [[ ${found_set_flag} = 'yes' ]] || return 1; # the flag was not found
 
+      # CC=, M4=: also used in the ./configure script
+      if [[ $flag_arg == 'CC' || $flag_arg == 'M4' ]]
+      then
+        eval $flag_arg=$flag_cmd
+      fi
+
       # the flag was found
       if [[ $promise_closing = 'yes' ]]
       then
@@ -267,6 +293,7 @@ function parse_flags {
         M4FLAGS+="-D${SET_FLAG_PREFIX}${flag_arg}=${flag_cmd} "
       fi
 
+   #################### INCLUDE / EXCLUDE ####################
     elif [[ ${flag:0:1} = '-' || ${flag:0:1} = '+' ]] # probably setting an include-flag
     then
 
