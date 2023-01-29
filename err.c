@@ -16,6 +16,7 @@ static const string_s emsg[] = {
   [ENOHASHCHANGING] =
     ERR_STRING("libvsl", "hash-changing functions are not allowed"),
   [EIDTOOBIG]       = ERR_STRING("libvsl", "identifier is too big"),
+  [EOOM]            = ERR_STRING("libvsl", "out-of-memory malloc"),
 };
 
 /** for now, this function is only called once and the entire

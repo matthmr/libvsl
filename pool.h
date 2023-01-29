@@ -4,6 +4,7 @@
 #  include <stdlib.h>
 
 #  include "utils.h"
+#  include "err.h"
 
 #  define POOL_T     struct __mempool
 #  define POOL_RET_T struct __mempool_ret
@@ -34,8 +35,9 @@
   POOL_RET_T {              \
     struct __mempool* mem;  \
     struct __mempool* base; \
-    t*        entry;        \
-    bool      same;         \
+    t*   entry;             \
+    bool same;              \
+    int  stat;              \
   }
 
 /**
@@ -46,6 +48,7 @@
    @base:  base memory pool           (what we attach to, root)
    @entry: current memory pool entry
    @same:  inclusion boolean
+   @stat:  exit status
  */
 
 #  ifndef POOL_ENTRY_T
@@ -70,7 +73,7 @@ static POOL_T __mempool_t = {
   .prev  = NULL,
   .idx   = 0,
   .total = POOL_AM,
-  .used  = 1,
+  .used  = 0,
 };
 #  define POOL __mempool_t
 
@@ -95,17 +98,23 @@ static POOL_RET_T pool_add_node(POOL_T* mpp) {
     .base  = mpp,
     .entry = NULL,
     .same  = true,
+    .stat  = 0,
   };
 
   if (mpp->used == mpp->total) {
     if (!mpp->next) {
       // TODO: even though this has no way to get leaked,
-      //       free it when exiting `main'
-      mpp->next        = malloc(sizeof(POOL_T));
+      //       free it when exiting `main'; also
+      mpp->next = malloc(sizeof(POOL_T));
 
-      mpp->next->idx   = (mpp->idx + 1);
-      mpp->next->prev  = mpp;
-      mpp->next->next  = NULL;
+      // OOM (somehow)
+      if (mpp->next == NULL) {
+        defer_for_as(ret.stat, err(EOOM));
+      }
+
+      mpp->next->idx  = 0;
+      mpp->next->prev = mpp;
+      mpp->next->next = NULL;
     }
 
     ret.same          = false;
@@ -118,7 +127,7 @@ static POOL_RET_T pool_add_node(POOL_T* mpp) {
   ret.entry = (mpp->mem + mpp->used);
   ++mpp->used;
 
-  return ret;
+  done_for(ret);
 }
 
 /**

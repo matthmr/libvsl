@@ -12,76 +12,75 @@
 
 INC_STRING(CGEN_OUTBUF);
 
-static string_i outbuf;
+static string_i outbuf = {
+  .idx = 0,
+};
 
 const char autogen_notice[] = \
   "// THIS FILE IS AUTO-GENERATED. DO NOT EDIT\n\n";
 
-static inline void write_file(int fd, string_i* buf, int size) {
-  buf->idx = 0;
+static inline void write_file(int fd) {
+  if (!outbuf.idx) {
+    return;
+  }
 
-  int ret = write(fd, buf->string, size);
+  int wstat  = write(fd, outbuf.string, outbuf.idx);
+  outbuf.idx = 0;
 
-  if (ret == -1) {
+  if (wstat == -1) {
     write(STDERR_FILENO, ERR_MSG("cgen", "error in cgen"));
     exit(1);
   }
 }
 
-static uint inc_buf_idx(string_i* buf, char* string, uint idx) {
-  uint size    = buf->size,
-       inc_idx = buf->idx;
-  char* stri   = buf->string;
+static void write_string(char* string) {
+  char* stri    = outbuf.string;
+  uint  inc_idx = outbuf.idx;
 
-  for (;;) {
-    if (string[idx] == '\0') {
-      break;
-    }
-    else if (size > 0 && inc_idx == CGEN_OUTBUF) {
-      write_file(STDOUT_FILENO, buf, buf->size);
-      return idx;
+  for (uint idx = 0; string[idx] != '\0'; ++inc_idx, ++idx) {
+    if (inc_idx == CGEN_OUTBUF) {
+      outbuf.idx = CGEN_OUTBUF;
+      write_file(STDOUT_FILENO);
+      inc_idx = 0;
     }
 
     stri[inc_idx] = string[idx];
-    ++inc_idx, ++idx;
   }
 
-  buf->size += idx;
-  buf->idx   = inc_idx;
-
-  return 0;
+  outbuf.idx = inc_idx;
 }
 
-static inline void write_string(char* string) {
-  int ret = inc_buf_idx(&outbuf, string, 0);
+static inline void cgen_clear(void) {
+  uint idx = outbuf.idx;
 
-  while (ret) {
-    ret = inc_buf_idx(&outbuf, string, 0);
+  if (idx == CGEN_OUTBUF) {
+    return;
+  }
+
+  for (; idx < CGEN_OUTBUF; ++idx) {
+    outbuf.string[idx] = '\0';
   }
 }
+
+////////////////////////////////////////////////////////////////////////////////
 
 void cgen_notice(void) {
   write_string((char*)autogen_notice);
 }
 
-void cgen_atoi(uint num) {
-  uint num_idx   = num;
-  uint idx       = 0;
-
-  char string[1] = {0};
-
+void cgen_itoa_string(uint num) {
+  uint num_idx = num, idx = 0;
   do {
     num_idx /= 10;
     idx++;
   } while (num_idx);
 
   uint exp = 1;
-  for (uint _ = 1; _ < idx; _++) {
+  for (uint _ = 1; _ < idx; ++_) {
     exp *= 10;
   }
 
-  idx = 0;
-
+  char string[1] = {0};
   while (exp) {
     uint div = num / exp;
     *string = ITOA(div);
@@ -91,9 +90,37 @@ void cgen_atoi(uint num) {
   }
 }
 
+char* cgen_itoa(char* buf, int buf_size, uint num) {
+  uint num_idx = num, idx = 0;
+  do {
+    num_idx /= 10;
+    idx++;
+  } while (num_idx);
+
+  uint exp = 1;
+  for (uint _ = 1; _ < idx; ++_) {
+    exp *= 10;
+  }
+
+  uint buf_idx = 0;
+  while (exp) {
+    uint div = num / exp;
+    buf[buf_idx] = ITOA(div);
+    num -= exp * div;
+    exp /= 10;
+    ++buf_idx;
+  }
+
+  for (; buf_idx < buf_size; ++buf_idx) {
+    buf[buf_idx] = '\0';
+  }
+
+  return buf;
+}
+
 void cgen_index(uint idx) {
   write_string("[");
-  cgen_atoi(idx);
+  cgen_itoa_string(idx);
   write_string("]");
 }
 
@@ -111,11 +138,21 @@ void cgen_field(char* name, enum cgen_typ typ, void* dat) {
   write_string(" = ");
 
   switch (typ) {
+  case CGEN_UNKNOWN:
+    write(STDERR_FILENO, ERR_MSG("cgen", "error in cgen"));
+    exit(1);
+    break;
   case CGEN_RECURSE:
     write_string("{ ");
     return;
   case CGEN_INT:
-    cgen_atoi(*(int*) dat);
+    cgen_itoa_string(*(int*) dat);
+    break;
+  case CGEN_SHORT:
+    cgen_itoa_string(*(short*) dat);
+    break;
+  case CGEN_CHAR:
+    cgen_itoa_string(*(char*) dat);
     break;
   case CGEN_STRING:
     if (dat) {
@@ -128,5 +165,6 @@ void cgen_field(char* name, enum cgen_typ typ, void* dat) {
 }
 
 void cgen_flush(void) {
-  write_file(STDOUT_FILENO, &outbuf, outbuf.size);
+  cgen_clear();
+  write_file(STDOUT_FILENO);
 }

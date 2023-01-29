@@ -19,6 +19,7 @@ enum ecode {
   EISNOTFUNC,
   ENOHASHCHANGING,
   EIDTOOBIG,
+  EOOM,
 };
 
 #  define ECODE_LEN (EIDTOOBIG)

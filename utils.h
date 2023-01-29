@@ -170,7 +170,6 @@ typedef struct string_i string_i;
 #  define INC_STRING(am) \
   struct string_i {      \
     char string[am];     \
-    uint size;           \
     uint idx;            \
   }
 
