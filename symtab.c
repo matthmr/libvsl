@@ -103,7 +103,6 @@ struct lisp_sym_ret lisp_symtab_get(struct lisp_hash hash) {
 
 int symtab_init(void) {
   for (uint i = 0; i < SYMTAB_PRIM; ++i) {
-    symtab[i].total = SYMPOOL;
     symtab_pp[i]    = (symtab + i);
   }
 
