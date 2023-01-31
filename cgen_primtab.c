@@ -12,46 +12,48 @@ static const char* __cgen_sym_typ[] = {
   [__LISP_CLISP_SYM] = "__LISP_SYM",
 };
 
-#define CLISP_PRIM_FUN(__fun)    \
-  {                              \
-    .str = __fun,                \
-    .sym = {                     \
-      .typ = __LISP_CLISP_FUN,   \
-      .dat = "lisp_prim_" __fun, \
-    },                           \
+#define CLISP_PRIM_FUN(__fun,_l0,_l1,_s0,_s1) \
+  {                                           \
+    .str = __fun,                             \
+    .sym = {                                  \
+      .typ  = __LISP_CLISP_FUN,               \
+      .dat  = "lisp_prim_" __fun,             \
+      .size = {_s0, _s1},                     \
+      .litr = {_l0, _l1},                     \
+    },                                        \
   }
 
-#define CLISP_PRIM_SYM(__sym, __val) \
-  {                                  \
-    .str = __sym,                    \
-    .sym = {                         \
-      .typ = __LISP_CLISP_SYM,       \
-      .dat = __val,                  \
-    },                               \
+#define CLISP_PRIM_SYM(__sym,__val) \
+  {                                 \
+    .str = __sym,                   \
+    .sym = {                        \
+      .typ = __LISP_CLISP_SYM,      \
+      .dat = __val,                 \
+    },                              \
   }
 
 static struct clisp_sym vsl_primtab[] = {
   // turing completion + code-data switching
-  CLISP_PRIM_FUN("set"),
-  CLISP_PRIM_FUN("func"),
-  CLISP_PRIM_FUN("eval"),
-  CLISP_PRIM_FUN("quot"),
-  CLISP_PRIM_FUN("if"),
-  CLISP_PRIM_FUN("eq"),
-  CLISP_PRIM_FUN("not"),
-  CLISP_PRIM_FUN("block"),
-  CLISP_PRIM_FUN("while"),
-  CLISP_PRIM_FUN("break"),
-  CLISP_PRIM_FUN("continue"),
-  CLISP_PRIM_FUN("return"),
-  CLISP_PRIM_FUN("goto"),
-  CLISP_PRIM_FUN("label"),
-  CLISP_PRIM_FUN("cond"),
+  CLISP_PRIM_FUN("set", 2, 0, 1, 0), // (set 'x y)
+  CLISP_PRIM_FUN("fun", 2, INFINITY, 1, 2), // (fun 'x (...) ...)
+  CLISP_PRIM_FUN("eval", 1, 0, 1, 0), // (eval ...)
+  CLISP_PRIM_FUN("quot", 1, 0, 0, 0), // (quot ...)
+  CLISP_PRIM_FUN("if", 2, 3, 0, 0), // (if x y z?)
+  CLISP_PRIM_FUN("eq", 2, 0, 0, 0), // (eq x y)
+  CLISP_PRIM_FUN("not", 1, 0, 0, 0), // (not x)
+  CLISP_PRIM_FUN("block", 0, INFINITY, 0, 0), // (block ...)
+  CLISP_PRIM_FUN("while", 1, 2, 0, 0), // (while x y?)
+  CLISP_PRIM_FUN("break", 0, 0, 0, 0), // (break)
+  CLISP_PRIM_FUN("continue", 0, 0, 0, 0), // (continue)
+  CLISP_PRIM_FUN("return", 0, 1, 0, 0), // (return x?)
+  CLISP_PRIM_FUN("goto", 1, 0, 1, 0), // (goto 'x)
+  CLISP_PRIM_FUN("label", 1, 0, 1, 0), // (label 'x)
+  CLISP_PRIM_FUN("cond", 1, INFINITY, 1, INFINITY), // (cond (x y)...)
 
   // lisp-specific
-  CLISP_PRIM_FUN("behead"),
-  CLISP_PRIM_FUN("head"),
-  CLISP_PRIM_FUN("list"),
+  CLISP_PRIM_FUN("behead", 1, 0, 0, 0), // (behead x)
+  CLISP_PRIM_FUN("head", 1, 0, 0, 0), // (head x)
+  CLISP_PRIM_FUN("list", 1, INFINITY, 1, INFINITY), // (list ...)
 
   // booleans
   CLISP_PRIM_SYM("t", "NULL"),
@@ -154,7 +156,10 @@ static void __cgen_transpile_sym_data(POOL_T* pp, uint idx, uint pidx,
     cgen_close_field();
     cgen_field("dat",      CGEN_STRING,  sym[i].dat);
     cgen_field("typ",      CGEN_STRING,  __cgen_sym_typ[sym[i].typ]);
-    // TODO: `::size' and `::litr'
+    if (sym[i].typ == __LISP_CLISP_FUN) {
+      cgen_field_array("size", CGEN_INT, sym[i].size, SIZEOF(sym[i].size));
+      cgen_field_array("litr", CGEN_INT, sym[i].litr, SIZEOF(sym[i].litr));
+    }
     cgen_close_field();
     cgen_string("\n");
   }

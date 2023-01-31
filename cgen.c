@@ -135,6 +135,33 @@ void cgen_field(char* name, enum cgen_typ typ, void* dat) {
   write_string(", ");
 }
 
+void cgen_field_array(char* name, enum cgen_typ typ, void* dat, uint size) {
+  write_string(".");
+  write_string(name);
+  write_string(" = {");
+
+  switch (typ) {
+  case CGEN_INT:
+    for (uint i = 0; i < size; ++i) {
+      cgen_itoa_string(((int*) dat)[i]);
+      write_string(", ");
+    }
+    break;
+  case CGEN_SHORT:
+    for (uint i = 0; i < size; ++i) {
+      cgen_itoa_string(((short*) dat)[i]);
+      write_string(", ");
+    }
+    break;
+  case CGEN_UNKNOWN: default:
+    cgen_err(ERR_MSG("cgen", "unknown or unsupported type for array field"));
+    exit(1);
+    break;
+  }
+
+  write_string("}, ");
+}
+
 void cgen_flush(void) {
   cgen_clear();
   write_file(STDOUT_FILENO);

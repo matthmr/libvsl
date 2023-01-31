@@ -27,6 +27,7 @@ void cgen_flush(void);
 
 void cgen_index(uint idx);
 void cgen_field(char* name, enum cgen_typ typ, void* dat);
+void cgen_field_array(char* name, enum cgen_typ typ, void* dat, uint size);
 void cgen_close_field(void);
 
 INC_STRING(CGEN_OUTBUF);

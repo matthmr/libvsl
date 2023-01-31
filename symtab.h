@@ -60,6 +60,8 @@ enum lisp_sym_typ {
   __LISP_CLISP_FUN,
 };
 
+#  define INFINITY (-1u)
+
 /** NOTE: the implementations of this LISP are *purely symbolic*,
           that means no integer, string, float, or whatever other
           literal type you're used to are implemented in this language.
