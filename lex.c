@@ -3,11 +3,10 @@
 #include "debug.h"
 #include "stack.h" // also includes `sexp.h'
 #include "lex.h"   // also includes `symtab.h'
-#include "err.h"
 
 #undef LOCK_POOL_THREAD
 
-#include "pool.h"
+#include "pool.h"  // also includes `err.h'
 
 #define SEXP_POOLP POOLP
 
@@ -86,7 +85,7 @@ lisp_lex_csym(struct lisp_lex lex, char c) {
     lex.slave       = ret.slave;
   }
 
-  DB_FMT("vslisp: character (%c) (0x%x)", c, lex.master.hash.sum);
+  DB_FMT("[ == ] libvsl: character (%c) (0x%x)", c, lex.master.hash.sum);
 
   // it's *very* unlikely `inc_hash' is going to error, but if it does,
   // the user may be a bit puzzled as for why libvsl erroed, as it

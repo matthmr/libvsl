@@ -49,7 +49,7 @@ clean-tags:
 	@echo "RM TAGS"
 	@rm -rfv TAGS
 
-clean: clean-obj clean-tags clean-targets clean-make
+clean: clean-obj clean-cgen clean-tags clean-targets clean-make
 
 tags:
 	@echo "ETAGS TAGS"

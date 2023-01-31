@@ -11,6 +11,7 @@ int main(void) {
   int ret = 0;
 
   sexp_init();
+  symtab_init();
 
   if (frontend) {
     assert(frontend() == 0, err(EFRONTEND));
