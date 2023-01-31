@@ -139,11 +139,22 @@
 #  define MSG(x) \
   x, ((sizeof(x)/sizeof(char)) - 1)
 
+#  define SIZEOF(x) \
+  (sizeof((x))/sizeof(*(x)))
+
 #  define LINE(x) \
   x "\n"
 
 #  define STRING(x) \
   {MSG(LINE(x))}
+
+// machine-human
+#  define IDX_MH(x) \
+  ((x) - 1)
+
+// human-machine
+#  define IDX_HM(x) \
+  ((x) + 1)
 
 typedef unsigned char  bool, uchar;
 typedef unsigned short ushort;
@@ -158,20 +169,27 @@ struct string_s {
 typedef struct string_s string_s;
 
 /** GENERIC UTILS: END */
+#endif
 
 /** STRING UTILS: BEGIN */
 
-#  ifdef PROVIDE_INC_STRING
-#    define PROVIDE_INC_STRING
+#ifdef PROVIDE_INC_STRING
+#  define PROVIDE_INC_STRING
 struct string_i;
 typedef struct string_i string_i;
-#  endif
 
 #  define INC_STRING(am) \
   struct string_i {      \
     char string[am];     \
     uint idx;            \
   }
+
+struct string_ip {
+  char* string;
+  uint idx;
+};
+
+typedef struct string_ip string_ip;
 
 #  define ITOA(x) \
   (x) + 0x30

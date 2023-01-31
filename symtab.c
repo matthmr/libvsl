@@ -85,12 +85,11 @@ int lisp_symtab_set(struct lisp_sym sym) {
   POOL_RET_T pr  = pool_add_node(mpp);
   assert(pr.stat == 0, OR_ERR());
 
-  if (!pr.same) {
+  if (pr.base != pr.mem) {
     mpp = symtab_pp[idx] = pr.mem;
   }
 
-  mpp->mem[mpp->idx] = sym;
-  ++mpp->idx;
+  mpp->mem[IDX_MH(mpp->idx)] = sym;
 
   done_for(ret);
 }

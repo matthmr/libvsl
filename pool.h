@@ -14,8 +14,6 @@
     struct __mempool* next; \
     struct __mempool* prev; \
     uint idx;               \
-    uint total;             \
-    uint used;              \
     t mem[am];              \
   }
 
@@ -27,8 +25,6 @@
    @next:  next section
    @prev:  previous section
    @idx:   index of the current section within the pool chain
-   @total: total number of entries
-   @used:  total number of entries used
  */
 
 #  define MEMPOOL_RET(t)    \
@@ -36,7 +32,6 @@
     struct __mempool* mem;  \
     struct __mempool* base; \
     t*   entry;             \
-    bool same;              \
     int  stat;              \
   }
 
@@ -47,7 +42,6 @@
    @mem:   current memory pool        (what we attach, child)
    @base:  base memory pool           (what we attach to, root)
    @entry: current memory pool entry
-   @same:  inclusion boolean
    @stat:  exit status
  */
 
@@ -72,8 +66,6 @@ static POOL_T __mempool_t = {
   .next  = NULL,
   .prev  = NULL,
   .idx   = 0,
-  .total = POOL_AM,
-  .used  = 0,
 };
 #  define POOL __mempool_t
 
@@ -97,11 +89,10 @@ static POOL_RET_T pool_add_node(POOL_T* mpp) {
     .mem   = NULL,
     .base  = mpp,
     .entry = NULL,
-    .same  = true,
     .stat  = 0,
   };
 
-  if (mpp->used == mpp->total) {
+  if (mpp->idx == POOL_AM) {
     if (!mpp->next) {
       // TODO: even though this has no way to get leaked,
       //       free it when exiting `main'; also
@@ -117,15 +108,13 @@ static POOL_RET_T pool_add_node(POOL_T* mpp) {
       mpp->next->next = NULL;
     }
 
-    ret.same          = false;
-    mpp->next->total  = mpp->total;
-    mpp->next->used   = 0;
-    mpp               = mpp->next;
+    mpp->next->idx = 0;
+    mpp            = mpp->next;
   }
 
   ret.mem   = mpp;
-  ret.entry = (mpp->mem + mpp->used);
-  ++mpp->used;
+  ret.entry = (mpp->mem + mpp->idx);
+  ++mpp->idx;
 
   done_for(ret);
 }
@@ -155,7 +144,6 @@ static POOL_RET_T pool_from_idx(POOL_T* mpp, uint idx) {
   ret.entry  =
     (ret.mem = pp)->mem;
   ret.base   = mpp;
-  ret.same   = (bool) (pp == mpp);
 
   return ret;
 }

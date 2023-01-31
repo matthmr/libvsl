@@ -14,11 +14,9 @@ static struct lisp_sexp* head = NULL;
 struct lisp_sexp* root        = NULL;
 
 static inline void pool_clean(POOL_T* pp) {
-  uint pn = pp->total;
-
   for (; pp; pp = pp->next) {
-    pp->used = 0;
-    for (uint i = 0; i < pn; ++i) {
+    pp->idx = 0;
+    for (uint i = 0; i < POOL_AM; ++i) {
       pp->mem[i].t = 0;
     }
   }
@@ -34,7 +32,7 @@ lisp_sexp_node_set_pos(enum sexp_t t, POOL_RET_T pr,
   uint off              = 0;
   struct lisp_sexp* mem = NULL;
 
-  if (!pr.same && (t == ROOT)) {
+  if (pr.base != pr.mem && (t == ROOT)) {
     mem = pr.base->mem;
     off = pr.base->idx;
   }
@@ -79,16 +77,16 @@ void lisp_sexp_node_add(POOL_T** mpp) {
 
   if (!head) {
     DB_MSG("  -> EV: attach to root");
-    root->t      = (__SEXP_SELF_ROOT | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
-    head         = root;
-    (*mpp)->used = 1;
+    root->t     = (__SEXP_SELF_ROOT | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
+    head        = root;
+    (*mpp)->idx = 1;
     return;
   }
 
   POOL_RET_T pr              = pool_add_node(*mpp);
   struct lisp_sexp* new_head = pr.entry;
 
-  if (!pr.same) {
+  if (pr.base != pr.mem) {
     *mpp = pr.mem;
   }
 
@@ -152,7 +150,7 @@ void lisp_sexp_node_add(POOL_T** mpp) {
     pr        = pool_add_node(*mpp);
     new_head  = pr.entry;
 
-    if (!pr.same) {
+    if (pr.base != pr.mem) {
       *mpp    = pr.mem;
     }
 
@@ -229,7 +227,7 @@ void lisp_sexp_sym(POOL_T** mpp, struct lisp_hash hash) {
     POOL_RET_T pr               = pool_add_node(*mpp);
     struct lisp_sexp* lexp_head = pr.entry;
 
-    if (!pr.same) {
+    if (pr.base != pr.mem) {
       *mpp = pr.mem;
     }
 
@@ -428,7 +426,6 @@ void lisp_sexp_end(POOL_T* mpp) {
   pp.mem   =
   pp.base  = mpp;
   pp.entry = phead;
-  pp.same  = true;
 
   bool lexp_head = ((phead->t & __SEXP_SELF_LEXP) && true);
 

@@ -4,13 +4,8 @@
 #include <unistd.h>
 #include <stdlib.h>
 
-#define PROVIDE_INC_STRING
-
-#include "utils.h"
 #include "cgen.h"
 #include "err.h"
-
-INC_STRING(CGEN_OUTBUF);
 
 static string_i outbuf = {
   .idx = 0,
@@ -18,6 +13,11 @@ static string_i outbuf = {
 
 const char autogen_notice[] = \
   "// THIS FILE IS AUTO-GENERATED. DO NOT EDIT\n\n";
+
+static inline void cgen_err(char* msg, uint size) {
+  write(STDERR_FILENO, msg, size);
+  exit(1);
+}
 
 static inline void write_file(int fd) {
   if (!outbuf.idx) {
@@ -28,8 +28,7 @@ static inline void write_file(int fd) {
   outbuf.idx = 0;
 
   if (wstat == -1) {
-    write(STDERR_FILENO, ERR_MSG("cgen", "error in cgen"));
-    exit(1);
+    cgen_err(ERR_MSG("cgen", "IO error in libc's `write'"));
   }
 }
 
@@ -64,10 +63,6 @@ static inline void cgen_clear(void) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void cgen_notice(void) {
-  write_string((char*)autogen_notice);
-}
-
 void cgen_itoa_string(uint num) {
   uint num_idx = num, idx = 0;
   do {
@@ -83,39 +78,15 @@ void cgen_itoa_string(uint num) {
   char string[1] = {0};
   while (exp) {
     uint div = num / exp;
-    *string = ITOA(div);
+    *string  = ITOA(div);
     write_string(string);
     num -= exp * div;
     exp /= 10;
   }
 }
 
-char* cgen_itoa(char* buf, int buf_size, uint num) {
-  uint num_idx = num, idx = 0;
-  do {
-    num_idx /= 10;
-    idx++;
-  } while (num_idx);
-
-  uint exp = 1;
-  for (uint _ = 1; _ < idx; ++_) {
-    exp *= 10;
-  }
-
-  uint buf_idx = 0;
-  while (exp) {
-    uint div = num / exp;
-    buf[buf_idx] = ITOA(div);
-    num -= exp * div;
-    exp /= 10;
-    ++buf_idx;
-  }
-
-  for (; buf_idx < buf_size; ++buf_idx) {
-    buf[buf_idx] = '\0';
-  }
-
-  return buf;
+void cgen_notice(void) {
+  write_string((char*)autogen_notice);
 }
 
 void cgen_index(uint idx) {
@@ -139,7 +110,7 @@ void cgen_field(char* name, enum cgen_typ typ, void* dat) {
 
   switch (typ) {
   case CGEN_UNKNOWN:
-    write(STDERR_FILENO, ERR_MSG("cgen", "error in cgen"));
+    cgen_err(ERR_MSG("cgen", "unknown type for field"));
     exit(1);
     break;
   case CGEN_RECURSE:
@@ -167,4 +138,86 @@ void cgen_field(char* name, enum cgen_typ typ, void* dat) {
 void cgen_flush(void) {
   cgen_clear();
   write_file(STDOUT_FILENO);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+string_is cgen_stris_from(char* string, uint size) {
+  string_is ret = {0};
+
+  ret.inc.string = string;
+  ret.inc.idx    = 0;
+  ret.size       = size;
+
+  return ret;
+}
+
+void cgen_itoa_for(uint num, string_is* stris) {
+  char* buf    = stris->inc.string;
+  uint buf_idx = stris->inc.idx;
+  uint size    = stris->size;
+
+  uint num_idx = num, idx = 0;
+
+  do {
+    num_idx /= 10;
+    idx++;
+  } while (num_idx);
+
+  uint exp = 1;
+  for (uint _ = 1; _ < idx; ++_) {
+    exp *= 10;
+  }
+
+  while (exp) {
+    uint div = num / exp;
+    buf[buf_idx] = ITOA(div);
+    num -= exp * div;
+    exp /= 10;
+    ++buf_idx;
+
+    if (buf_idx == size) {
+      cgen_err(ERR_MSG("cgen", "error in cgen"));
+    }
+  }
+
+  stris->inc.idx = buf_idx;
+}
+
+static void write_string_for(char* string, string_is* stris) {
+  char* stri    = stris->inc.string;
+  uint  inc_idx = stris->inc.idx;
+  uint  size    = stris->size;
+
+  for (uint idx = 0; string[idx] != '\0'; ++inc_idx, ++idx) {
+    if (inc_idx == size) {
+      cgen_err(ERR_MSG("cgen", "error in cgen"));
+    }
+
+    stri[inc_idx] = string[idx];
+  }
+
+  stris->inc.idx = inc_idx;
+}
+
+void cgen_string_for(char* string, string_is* stris) {
+  write_string_for(string, stris);
+}
+
+static inline void cgen_clear_for(string_is* stris) {
+  char* buf    = stris->inc.string;
+  uint buf_idx = stris->inc.idx;
+  uint size    = stris->size;
+
+  if (buf_idx == size) {
+    return;
+  }
+
+  for (; buf_idx < size; ++buf_idx) {
+    buf[buf_idx] = '\0';
+  }
+}
+
+void cgen_flush_for(string_is* stris) {
+  cgen_clear_for(stris);
 }
