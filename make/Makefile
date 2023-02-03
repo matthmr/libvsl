@@ -49,6 +49,7 @@ clean-tags:
 	@echo "RM TAGS"
 	@rm -rfv TAGS
 
+clean-dev: clean-obj clean-cgen clean-targets
 clean: clean-obj clean-cgen clean-tags clean-targets clean-make
 
 tags:

@@ -8,47 +8,45 @@
 #    define SYMPOOL (5)
 #  endif
 
-// hash cells per table
+// hash prime
 #  ifndef SYMTAB_PRIM
-#    define SYMTAB_PRIM  (97)
+#    define SYMTAB_PRIM  (61)
 #  endif
 
-// maximum number of characters per symbol
-#  define SYMTAB_MAX_SYM (SYMTAB_PRIM*SYMTAB_PRIM)
+// hash cells per table
+#  ifndef SYMTAB_CELL
+#    define SYMTAB_CELL  (60)
+#  endif
 
-#  define ASCII_FAC (32)
+/** NOTE: this is a sacrifice: the hashing algorithm is pretty simple, so we
+          need to fix the length of the identifiers. 94 characters should be
+          enough, for example:
+
+          aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+ */
+// maximum number of characters per symbol
+#  define SYMTAB_MAX_SYM (94)
+
+#  define ASCII_FAC (94)
+
+#  define ASCII_NORM(x) \
+  ((x) -= 32)
 
 #  define FOR_EACH_TABENT(i,x) \
   for (uint (i) = 0; (i) < (x); ++(i))
 
 #  define HASH_IDX(x) \
-  ((x).sum % SYMTAB_PRIM)
+  ((x).sum % SYMTAB_CELL)
 
 struct lisp_hash {
   uint   sum;  /** @sum:  the weighted numeric sum of the symbol
                      - the hash index is gotten by modulating the
-                       field with the `SYMTAB_PRIM' macro */
+                       field with the `SYMTAB_CELL' macro */
 
   uint   psum; /** @psum: the numeric sum of the symbol, without weights */
   ushort len;  /** @len:  the length of the symbol */
 
-  /**
-     @com_part: the sequential partitional factor of the
-                term after a modular zero. See example.
-     @com_pos:  the position for the field(s) above
-
-     EXAMPLE
-     -------
-
-     For prime 5:
-       - 2*1 + 5*2 + 3*3 -> @com_part = 3, @com_pos = 3
-       - 2*1 + 5*2       -> @com_part = 5, @com_pos = 2
-       - 4*1 + 2*2 + 4*3 -> @com_part = 4, @com_pos = 3
-       - 5*1 + 5*2       -> @com_part = 0, @com_pos = 0
-
-       - ... + com_part*com_pos + ...
-   */
-  uchar com_part, com_pos;
+  ushort com_part; /** @com_part: a fail-safe for the hash algorithm */
 };
 
 enum lisp_sym_typ {
@@ -97,13 +95,13 @@ struct lisp_hash_ret {
 };
 
 struct lisp_sym_ret {
-  struct lisp_sym master;
+  struct lisp_sym* master; // TODO: see `stack.c's TODO
   int slave;
 };
 
 struct lisp_hash_ret inc_hash(struct lisp_hash hash, char c);
 struct lisp_hash_ret str_hash(const char* str);
-void inc_hash_done(void);
+void inc_hash_done(struct lisp_hash* hash);
 void hash_done(struct lisp_hash* hash);
 
 // TODO: right now, these functions take the `symtab` variable globally.
@@ -126,7 +124,7 @@ int symtab_init(void);
 #  ifndef PROVIDE_SYMTAB_TABDEF
 extern
 #  endif
-POOL_T symtab[SYMTAB_PRIM]
+POOL_T symtab[SYMTAB_CELL]
 
 #  ifdef PROVIDE_SYMTAB_TABDEF
 = {0};
@@ -134,6 +132,6 @@ POOL_T symtab[SYMTAB_PRIM]
 ;
 #  endif
 
-extern POOL_T* symtab_pp[SYMTAB_PRIM];
+extern POOL_T* symtab_pp[SYMTAB_CELL];
 
 #endif

@@ -14,7 +14,7 @@ enum cgen_typ {
   CGEN_UNKNOWN = 0,
 
   CGEN_RECURSE = 1,
-  CGEN_CHAR,
+  CGEN_UCHAR,
   CGEN_SHORT,
   CGEN_INT,
   CGEN_STRING,
@@ -40,7 +40,8 @@ struct string_is {
 typedef struct string_is string_is;
 
 string_is cgen_stris_from(char* string, uint size);
-void cgen_itoa_for(uint num, string_is* stri);
-void cgen_string_for(char* string, string_is* stri);
-void cgen_flush_for(string_is* stri);
+void cgen_itoa_for(uint num, string_is* stris);
+void cgen_string_for(char* string, string_is* stris);
+void cgen_flush_for(string_is* stris);
+void cgen_index_for(uint idx, string_is* stris);
 #endif

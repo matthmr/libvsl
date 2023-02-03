@@ -1,66 +1,16 @@
 #include <unistd.h>
 
 #define PROVIDE_SYMTAB_TABDEF
-#include "symtab.h"
+#define PROVIDE_PRIM_CLISP
+
 #include "debug.h"
-#include "prim.h"
+#include "prim.h"  // also include `symtab.h'
 #include "cgen.h"
 #include "err.h"
 
 static const char* __cgen_sym_typ[] = {
   [__LISP_CLISP_FUN] = "__LISP_FUN",
   [__LISP_CLISP_SYM] = "__LISP_SYM",
-};
-
-#define CLISP_PRIM_FUN(__fun,_l0,_l1,_s0,_s1) \
-  {                                           \
-    .str = __fun,                             \
-    .sym = {                                  \
-      .typ  = __LISP_CLISP_FUN,               \
-      .dat  = "lisp_prim_" __fun,             \
-      .size = {_s0, _s1},                     \
-      .litr = {_l0, _l1},                     \
-    },                                        \
-  }
-
-#define CLISP_PRIM_SYM(__sym,__val) \
-  {                                 \
-    .str = __sym,                   \
-    .sym = {                        \
-      .typ = __LISP_CLISP_SYM,      \
-      .dat = __val,                 \
-    },                              \
-  }
-
-static struct clisp_sym vsl_primtab[] = {
-  // turing completion + code-data switching
-  CLISP_PRIM_FUN("set", 2, 0, 1, 0), // (set 'x y)
-  CLISP_PRIM_FUN("fun", 2, INFINITY, 1, 2), // (fun 'x (...) ...)
-  CLISP_PRIM_FUN("eval", 1, 0, 1, 0), // (eval ...)
-  CLISP_PRIM_FUN("quot", 1, 0, 0, 0), // (quot ...)
-  CLISP_PRIM_FUN("if", 2, 3, 0, 0), // (if x y z?)
-  CLISP_PRIM_FUN("eq", 2, 0, 0, 0), // (eq x y)
-  CLISP_PRIM_FUN("not", 1, 0, 0, 0), // (not x)
-  CLISP_PRIM_FUN("block", 0, INFINITY, 0, 0), // (block ...)
-  CLISP_PRIM_FUN("while", 1, 2, 0, 0), // (while x y?)
-  CLISP_PRIM_FUN("break", 0, 0, 0, 0), // (break)
-  CLISP_PRIM_FUN("continue", 0, 0, 0, 0), // (continue)
-  CLISP_PRIM_FUN("return", 0, 1, 0, 0), // (return x?)
-  CLISP_PRIM_FUN("goto", 1, 0, 1, 0), // (goto 'x)
-  CLISP_PRIM_FUN("label", 1, 0, 1, 0), // (label 'x)
-  CLISP_PRIM_FUN("cond", 1, INFINITY, 1, INFINITY), // (cond (x y)...)
-
-  // lisp-specific
-  CLISP_PRIM_FUN("behead", 1, 0, 0, 0), // (behead x)
-  CLISP_PRIM_FUN("head", 1, 0, 0, 0), // (head x)
-  CLISP_PRIM_FUN("list", 1, INFINITY, 1, INFINITY), // (list ...)
-
-  // booleans
-  CLISP_PRIM_SYM("t", "NULL"),
-  CLISP_PRIM_SYM("nil", "NULL"),
-
-  // EOL
-  {.str = NULL},
 };
 
 static void __cgen_preamble(void) {
@@ -109,9 +59,7 @@ static void __cgen_transpile_sym_future(char* field, char* future, uint idx) {
 
   cgen_string_for("&", strisp);
   cgen_string_for(future, strisp);
-  cgen_string_for("[", strisp);
-  cgen_itoa_for(idx, strisp);
-  cgen_string_for("]", strisp);
+  cgen_index_for(idx, strisp);
 
   cgen_field(field,  CGEN_STRING, stris.inc.string);
 }
@@ -151,8 +99,7 @@ static void __cgen_transpile_sym_data(POOL_T* pp, uint idx, uint pidx,
     cgen_field("sum",      CGEN_INT,     &sym[i].hash.sum);
     cgen_field("psum",     CGEN_INT,     &sym[i].hash.psum);
     cgen_field("len",      CGEN_SHORT,   &sym[i].hash.len);
-    cgen_field("com_part", CGEN_CHAR,    &sym[i].hash.com_part);
-    cgen_field("com_pos",  CGEN_CHAR,    &sym[i].hash.com_pos);
+    cgen_field("com_part", CGEN_SHORT,   &sym[i].hash.com_part);
     cgen_close_field();
     cgen_field("dat",      CGEN_STRING,  sym[i].dat);
     cgen_field("typ",      CGEN_STRING,  __cgen_sym_typ[sym[i].typ]);
@@ -190,7 +137,7 @@ static int __cgen_transpile_sym(POOL_T** stab_pp) {
 
   POOL_T* pp = NULL, * hpp = NULL;
 
-  FOR_EACH_TABENT(i, SYMTAB_PRIM) {
+  FOR_EACH_TABENT(i, SYMTAB_CELL) {
     pp     = stab_pp[i];
     uint n = 0;
 
@@ -239,9 +186,9 @@ static int __cgen_transpile_sym(POOL_T** stab_pp) {
     }
   }
 
-  cgen_string(LINE("POOL_T symtab[SYMTAB_PRIM] = {"));
+  cgen_string(LINE("POOL_T symtab[SYMTAB_CELL] = {"));
 
-  FOR_EACH_TABENT(i, SYMTAB_PRIM) {
+  FOR_EACH_TABENT(i, SYMTAB_CELL) {
     POOL_T* pp = stab_pp[i];
 
     if (pp->idx) {

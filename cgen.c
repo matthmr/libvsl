@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 
+#include "debug.h"
 #include "cgen.h"
 #include "err.h"
 
@@ -64,23 +65,24 @@ static inline void cgen_clear(void) {
 ////////////////////////////////////////////////////////////////////////////////
 
 void cgen_itoa_string(uint num) {
-  uint num_idx = num, idx = 0;
-  do {
-    num_idx /= 10;
-    idx++;
-  } while (num_idx);
+  if ((int) num == -1) {
+    write_string("-1u");
+    return;
+  }
+
+  DB_FMT("[ == ] cgen: `cgen_itoa_string' received number: %d", num);
 
   uint exp = 1;
-  for (uint _ = 1; _ < idx; ++_) {
+  for (uint _num = num; _num >= 10; _num /= 10) {
     exp *= 10;
   }
 
   char string[1] = {0};
   while (exp) {
-    uint div = num / exp;
-    *string  = ITOA(div);
+    uint dig = num / exp;
+    *string  = ITOA(dig);
     write_string(string);
-    num -= exp * div;
+    num -= (dig * exp);
     exp /= 10;
   }
 }
@@ -122,8 +124,8 @@ void cgen_field(char* name, enum cgen_typ typ, void* dat) {
   case CGEN_SHORT:
     cgen_itoa_string(*(short*) dat);
     break;
-  case CGEN_CHAR:
-    cgen_itoa_string(*(char*) dat);
+  case CGEN_UCHAR:
+    cgen_itoa_string(*(uchar*) dat);
     break;
   case CGEN_STRING:
     if (dat) {
@@ -184,22 +186,20 @@ void cgen_itoa_for(uint num, string_is* stris) {
   uint buf_idx = stris->inc.idx;
   uint size    = stris->size;
 
-  uint num_idx = num, idx = 0;
-
-  do {
-    num_idx /= 10;
-    idx++;
-  } while (num_idx);
+  if ((int) num == -1) {
+    write_string("-1u");
+    return;
+  }
 
   uint exp = 1;
-  for (uint _ = 1; _ < idx; ++_) {
+  for (uint _num = num; _num >= 10; _num /= 10) {
     exp *= 10;
   }
 
   while (exp) {
-    uint div = num / exp;
-    buf[buf_idx] = ITOA(div);
-    num -= exp * div;
+    uint dig = num / exp;
+    buf[buf_idx] = ITOA(dig);
+    num -= (exp * dig);
     exp /= 10;
     ++buf_idx;
 
@@ -243,6 +243,12 @@ static inline void cgen_clear_for(string_is* stris) {
   for (; buf_idx < size; ++buf_idx) {
     buf[buf_idx] = '\0';
   }
+}
+
+void cgen_index_for(uint idx, string_is* stris) {
+  write_string_for("[", stris);
+  cgen_itoa_for(idx, stris);
+  write_string_for("]", stris);
 }
 
 void cgen_flush_for(string_is* stris) {

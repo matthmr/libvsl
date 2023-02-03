@@ -1,6 +1,8 @@
 #include "stack.h"
 #include "err.h"
 
+// TODO: some functions may change variables through a pointer
+
 ////////////////////////////////////////////////////////////
 
 /** SEXP stack: BEGIN */
@@ -71,7 +73,9 @@ lisp_stack_lex_frame_var(struct lisp_frame* frame,
   struct lisp_sym_ret stret = lisp_symtab_get(frame->stack.typ.lex.hash);
 
   assert(stret.slave == 0, OR_ERR());
-  frame->tab.reg[frame->tab.i] = stret.master;
+
+  // TODO: this is probably wrong
+  frame->tab.reg[frame->tab.i] = *stret.master;
 
   done_for(ret);
 }
@@ -88,7 +92,7 @@ int lisp_stack_lex_frame(struct lisp_stack* stack) {
   // it's guaranteed that if we're calling this function,
   // the first argument is expected to be a function
   struct lisp_sym_ret stret = lisp_symtab_get(stack->typ.lex.hash);
-  struct lisp_sym* sym      = &stret.master;
+  struct lisp_sym* sym      = stret.master;
 
   struct lisp_sym reg[sym->size[0]];
 
