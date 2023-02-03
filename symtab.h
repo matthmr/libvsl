@@ -15,7 +15,7 @@
 
 // hash cells per table
 #  ifndef SYMTAB_CELL
-#    define SYMTAB_CELL  (60)
+#    define SYMTAB_CELL  (64)
 #  endif
 
 /** NOTE: this is a sacrifice: the hashing algorithm is pretty simple, so we

@@ -22,10 +22,6 @@ static inline int mod_norm(int val, int len) {
   return val - s(len);
 }
 
-static inline int prt_norm(int val, int len) {
-  return val - len;
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 
 struct lisp_hash_ret inc_hash(struct lisp_hash hash, char c) {
@@ -64,8 +60,7 @@ struct lisp_hash_ret inc_hash(struct lisp_hash hash, char c) {
 }
 
 void inc_hash_done(struct lisp_hash* hash) {
-  hash->sum  = mod_norm(hash->sum, hash->len);
-  hash->psum = prt_norm(hash->sum, hash->len);
+  hash->sum = mod_norm(hash->sum, hash->len);
 
   hash_i = 1;
 }
