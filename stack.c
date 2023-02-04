@@ -5,12 +5,11 @@
 
 ////////////////////////////////////////////////////////////
 
+// TODO: stub
 /** SEXP stack: BEGIN */
 
-// TODO: stub
-void
-lisp_stack_sexp_push(struct lisp_stack* stack,
-                     POOL_T* mpp, struct lisp_sexp* head) {
+void lisp_stack_sexp_push(struct lisp_stack* stack, POOL_T* mpp,
+                          struct lisp_sexp* head) {
   stack->ev  |= __STACK_PUSH_FUNC;
   // stack->fun  = (lisp_fun) head->left.sym.dat;
 
@@ -18,10 +17,8 @@ lisp_stack_sexp_push(struct lisp_stack* stack,
   stack->typ.sexp.mpp  = mpp;
 }
 
-// TODO: stub
-void
-lisp_stack_sexp_push_var(struct lisp_stack* stack, POOL_T* mpp,
-                         struct lisp_sexp* head, enum lisp_stack_ev ev) {
+void lisp_stack_sexp_push_var(struct lisp_stack* stack, POOL_T* mpp,
+                              struct lisp_sexp* head, enum lisp_stack_ev ev) {
   stack->ev  |= ev;
   // stack->fun  = (lisp_fun) ((ev & __STACK_PUSH_LEFT)?
   //                            head->left.sym: head->right.sym).dat;
@@ -30,23 +27,18 @@ lisp_stack_sexp_push_var(struct lisp_stack* stack, POOL_T* mpp,
   stack->typ.sexp.mpp  = mpp;
 }
 
-// TODO: stub
-void
-lisp_stack_sexp_pop(struct lisp_stack* stack, POOL_T* mpp,
-                    struct lisp_sexp* head) {
+void lisp_stack_sexp_pop(struct lisp_stack* stack, POOL_T* mpp,
+                         struct lisp_sexp* head) {
   stack->ev |= __STACK_POP;
   stack->typ.sexp.head = head;
   stack->typ.sexp.mpp  = mpp;
 }
 
-// TODO: stub
-static int
-lisp_stack_sexp_frame_var(struct lisp_frame* frame) {
+static int lisp_stack_sexp_frame_var(struct lisp_frame* frame) {
   int ret = 0;
   done_for(ret);
 }
 
-// TODO: stub
 static int lisp_stack_sexp_frame(struct lisp_stack* stack) {
   int ret  = 0;
   done_for(ret);
@@ -56,9 +48,8 @@ static int lisp_stack_sexp_frame(struct lisp_stack* stack) {
 ////////////////////////////////////////////////////////////
 
 /** LEX stack: BEGIN */
-static int
-lisp_stack_lex_frame_var(struct lisp_frame* frame,
-                         struct lisp_sym* sym) {
+static int lisp_stack_lex_frame_var(struct lisp_frame* frame,
+                                    struct lisp_sym* sym) {
   int ret = 0;
 
   uint* size = sym->size;

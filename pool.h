@@ -24,7 +24,9 @@
    @mem:   memory pool
    @next:  next section
    @prev:  previous section
-   @idx:   index of the current section within the pool chain
+   @idx:   index of the current section within the pool chain; also used as
+           length. use the `IDX_HM' macro from `utils.h' to use it as an array
+           index
  */
 
 #  define MEMPOOL_RET(t)    \

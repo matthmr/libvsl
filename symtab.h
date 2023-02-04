@@ -124,14 +124,20 @@ int symtab_init(void);
 #  ifndef PROVIDE_SYMTAB_TABDEF
 extern
 #  endif
+
 POOL_T symtab[SYMTAB_CELL]
 
-#  ifdef PROVIDE_SYMTAB_TABDEF
-= {0};
-#  else
+#  ifndef PROVIDE_SYMTAB_TABDEF
 ;
+#  else
+= {0};
 #  endif
 
-extern POOL_T* symtab_pp[SYMTAB_CELL];
+struct lisp_symtab_pp {
+  POOL_T* mem;
+  POOL_T* base;
+};
+
+extern struct lisp_symtab_pp symtab_pp[SYMTAB_CELL];
 
 #endif

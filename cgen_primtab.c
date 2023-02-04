@@ -1,7 +1,6 @@
 #include <unistd.h>
 
 #define PROVIDE_SYMTAB_TABDEF
-#define PROVIDE_PRIM_CLISP
 
 #include "debug.h"
 #include "prim.h"  // also include `symtab.h'
@@ -22,20 +21,27 @@ static void __cgen_preamble(void) {
 }
 
 static int __cgen_compile_prim(struct clisp_sym* tab) {
-  struct lisp_hash_ret hash_ret = {
-    .master = {0},
-    .slave  = 0,
-  };
+  // this interface is ugly but it is what it is
+  struct {
+    struct lisp_sym      master;
+    struct lisp_hash_ret hash_sb;
+    int slave;
+  } ret = {0};
 
   for (; tab->str; ++tab) {
-    hash_ret = str_hash(tab->str);
-    assert_for(hash_ret.slave == 0, OR_ERR(), hash_ret.slave);
+    ret.hash_sb = str_hash(tab->str);
 
-    tab->sym.hash = hash_ret.master;
-    assert_for(lisp_symtab_set(tab->sym) == 0, OR_ERR(), hash_ret.slave);
+    ret.slave = ret.hash_sb.slave;
+    assert_for(ret.slave == 0, OR_ERR(), ret.slave);
+
+    ret.master = tab->sym;
+    ret.master.hash = ret.hash_sb.master;
+
+    ret.slave = lisp_symtab_set(ret.master);
+    assert_for(ret.slave == 0, OR_ERR(), ret.slave);
   }
 
-  done_for(hash_ret.slave);
+  done_for(ret.slave);
 }
 
 static void __cgen_transpile_sym_field(char* field, uint idx, uint pidx) {
@@ -132,13 +138,13 @@ static inline void __cgen_transpile_sym_entry(POOL_T* pp, uint pidx,
   __cgen_transpile_sym_data(pp, idx, pidx, in_array);
 }
 
-static int __cgen_transpile_sym(POOL_T** stab_pp) {
+static int __cgen_transpile_sym(struct lisp_symtab_pp* stab_pp) {
   int ret = 0;
 
   POOL_T* pp = NULL, * hpp = NULL;
 
   FOR_EACH_TABENT(i, SYMTAB_CELL) {
-    pp     = stab_pp[i];
+    pp     = stab_pp[i].mem;
     uint n = 0;
 
     while (pp->prev /* || pp->next */) {
@@ -182,14 +188,14 @@ static int __cgen_transpile_sym(POOL_T** stab_pp) {
         ++in;
       }
 
-      stab_pp[i] = hpp;
+      stab_pp[i].mem = hpp;
     }
   }
 
   cgen_string(LINE("POOL_T symtab[SYMTAB_CELL] = {"));
 
   FOR_EACH_TABENT(i, SYMTAB_CELL) {
-    POOL_T* pp = stab_pp[i];
+    POOL_T* pp = stab_pp[i].mem;
 
     if (pp->idx) {
       __cgen_transpile_sym_entry(pp, 0, true);
