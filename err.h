@@ -20,9 +20,10 @@ enum ecode {
   ENOHASHCHANGING,
   EIDTOOBIG,
   EOOM,
+  ENOTFOUND,
 };
 
-#  define ECODE_LEN (EIDTOOBIG)
+#  define ECODE_LEN (ENOTFOUND)
 #  define ERROR (-1)
 
 #  if ECODE_LEN == ERROR

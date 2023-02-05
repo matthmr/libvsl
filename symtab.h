@@ -38,6 +38,13 @@
 #  define HASH_IDX(x) \
   ((x).sum % SYMTAB_CELL)
 
+enum lisp_hash_mask {
+  HASH__sum      = BIT(0),
+  HASH__psum     = BIT(1),
+  HASH__len      = BIT(2),
+  HASH__com_part = BIT(3),
+};
+
 struct lisp_hash {
   uint   sum;  /** @sum:  the weighted numeric sum of the symbol
                      - the hash index is gotten by modulating the
@@ -47,6 +54,7 @@ struct lisp_hash {
   ushort len;  /** @len:  the length of the symbol */
 
   ushort com_part; /** @com_part: a fail-safe for the hash algorithm */
+  enum lisp_hash_mask rep; /** @rep: repetition mask for `get' functions */
 };
 
 enum lisp_sym_typ {
@@ -88,18 +96,21 @@ typedef bool (*in_between_t)  (struct lisp_sym* ppm, struct lisp_hash hash,
                                uint lower, uint upper);
 typedef bool (*ex_between_t)  (struct lisp_sym* ppm, struct lisp_hash hash,
                                uint lower, uint upper);
+typedef bool (*repeats_t)     (struct sort_t* sort);
+typedef uint (*yield_t)       (struct lisp_sym* ppm, uint i);
 typedef bool (*eq_t)          (uint n, struct lisp_hash hash);
 typedef bool (*lt_t)          (uint n, struct lisp_hash hash);
-typedef uint (*yield_t)       (struct lisp_sym* ppm, uint i);
 
 struct sort_t {
-  good_ending_t  good_ending;
-  in_between_t   in_between;
-  ex_between_t   ex_between;
-  eq_t           eq;
-  lt_t           lt;
-  yield_t        yield;
+  good_ending_t good_ending;
+  in_between_t  in_between;
+  ex_between_t  ex_between;
+  repeats_t     repeats;
+  yield_t       yield;
+  eq_t          eq;
+  lt_t          lt;
 
+  enum lisp_hash_mask mask;
   struct sort_t* next;
 };
 
@@ -120,6 +131,17 @@ struct lisp_hash_ret {
 struct lisp_sym_ret {
   struct lisp_sym* master; // TODO: see `stack.c's TODO
   int slave;
+};
+
+enum lisp_sort_stat {
+  SORT_RETURN = -1,
+  SORT_OK     = 0,
+  SORT_NEXT   = 1,
+};
+
+struct lisp_sort_ret {
+  uint master;
+  enum lisp_sort_stat slave;
 };
 
 struct lisp_hash_ret inc_hash(struct lisp_hash hash, char c);

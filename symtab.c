@@ -12,7 +12,7 @@
   } \
   static inline bool in_between__##x(struct lisp_sym* ppm,             \
                                      struct lisp_hash hash,            \
-                                      uint lower, uint upper) {        \
+                                     uint lower, uint upper) {         \
     return hash.x >= ppm[lower].hash.x && hash.x <= ppm[upper].hash.x; \
   } \
   static inline bool ex_between__##x(struct lisp_sym* ppm,             \
@@ -20,23 +20,28 @@
                                      uint lower, uint upper) {         \
     return hash.x > ppm[lower].hash.x && hash.x < ppm[upper].hash.x;   \
   } \
+  static inline bool repeats__##x(struct sort_t* sort) {               \
+    return sort->mask &= HASH__##x;                                    \
+  } \
+  static inline uint yield__##x(struct lisp_sym* ppm, uint i) {        \
+    return (uint) ppm[i].hash.x;                                       \
+  } \
   static inline bool eq__##x(uint n, struct lisp_hash hash) {          \
     return n == hash.x;                                                \
   } \
   static inline bool lt__##x(uint n, struct lisp_hash hash) {          \
     return n < hash.x;                                                 \
   } \
-  static inline uint yield__##x(struct lisp_sym* ppm, uint i) {        \
-    return (uint) ppm[i].hash.x;                                       \
-  } \
-  struct sort_t sort_##x = {         \
+  static struct sort_t sort_##x = {  \
     .good_ending = good_ending__##x, \
     .in_between  = in_between__##x,  \
     .ex_between  = ex_between__##x,  \
+    .repeats     = repeats__##x,     \
+    .yield       = yield__##x,       \
     .eq          = eq__##x,          \
     .lt          = lt__##x,          \
-    .yield       = yield__##x,       \
                                      \
+    .mask        = HASH__##x,        \
     .next        = NULL,             \
   }
 
@@ -47,7 +52,7 @@ SORT_FUNC_FOR(sum);
 SORT_FUNC_FOR(psum);
 SORT_FUNC_FOR(com_part);
 
-struct sort_t* sort_entry;
+static const struct sort_t* sort_entry = &sort_len;
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -70,150 +75,183 @@ static inline int mod_norm(int val, int len) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-enum lisp_symtab_sort {
-  SORT_RETURN = -1,
-  SORT_OK     = 0,
-  SORT_NEXT   = 1,
-};
-
-static inline int lisp_symtab_sort_small(uint* pp_idx, const uint bpp_idx,
-                                         struct lisp_sym* ppm,
-                                         struct lisp_hash hash,
-                                         struct sort_t* sort) {
-  struct {
-    uint idx;
-    uint am;
-  } sm_idx = {
-    .idx = -1u,
-    .am  = 0,
-  };
-
-  for (uint i = 0, lower = 0; i < bpp_idx; ++i) {
-    uint len = sort->yield(ppm, i);
-
-    if (sort->lt(len, hash)) {
-      if (len > lower) {
-        *pp_idx = (i+1);
-      }
-    }
-
-    else if (sort->eq(len, hash)) {
-      if (sm_idx.idx == -1u) {
-        sm_idx.idx = i;
-      }
-      ++sm_idx.am;
-    }
-  }
-
-  if (sm_idx.am) {
-    return SORT_OK;
-  }
-
-  return (*pp_idx == bpp_idx)? SORT_RETURN: SORT_OK;
-}
-
-/**             pp        base_pp
+/**              to_pp        from_pp
    [ . . . . | . . . . | . . . . ]
-                 ^pp_idx       ^base_idx
+                 ^to_idx(2)    ^from_idx(1)
+                      <------
 */
-static void lisp_symtab_sort_backprog(POOL_T* base_pp, uint base_idx,
-                                      POOL_T* pp, uint pp_idx) {
+static void lisp_symtab_sort_backprog(POOL_T* from_pp, uint from_idx,
+                                      POOL_T* to_pp,   uint to_idx) {
   struct lisp_sym tmp = {0}, * tmpp = NULL;
-  struct lisp_sym* pt = NULL;
-  POOL_T* p = pp;
+  struct lisp_sym* mem = NULL;
+  POOL_T* pp = from_pp;
   uint iter = 0;
 
   do {
-    pt = pp->mem;
+    mem = pp->mem;
 
+    // swap the last one's element with the first element of the current one
     if (iter > 0) {
-      *tmpp = pt[0];
-      pt[0] = tmp;
+      *tmpp = mem[0];
+      mem[0] = tmp;
     }
 
-    DB_FMT("[ == ] lisp_symtab_sort_backprog: i = %d", ((pp == p)? pp_idx: 0));
+    DB_FMT("[ == ] lisp_symtab_sort_backprog: i = %d",
+           ((pp == from_pp)? from_idx: SYMPOOL));
     DB_FMT("[ == ] lisp_symtab_sort_backprog: lim = %d",
-           ((pp == base_pp)? base_idx: SYMPOOL));
+           ((pp == to_pp)? to_idx: 0));
 
-    for (uint i   = ((pp == p)? pp_idx: 0),
-              lim = ((pp == base_pp)? base_idx: SYMPOOL);
-         i < lim; ++i) {
-      tmp     = pt[i+1];
-      pt[i+1] = pt[i];
-      pt[i]   = tmp;
+    // always go 0->SYMPOOL, unless in the edges
+    for (uint i   = ((pp == from_pp)? from_idx: SYMPOOL),
+              lim = ((pp == to_pp)?   to_idx:   0);
+         i > lim; --i) {
+      tmp      = mem[i];
+      mem[i]   = mem[i-1];
+      mem[i-1] = tmp;
     }
 
-    tmpp = &pt[pp == base_pp? base_idx: SYMPOOL];
+    tmpp = mem;
 
-    if (base_pp == pp) {
+    // we're done :)
+    if (from_pp == to_pp) {
       return;
     }
-  } while (++iter, pp->next);
+  } while (++iter, pp->prev);
+}
+
+struct lisp_sort_same_ret {
+  POOL_T* pp;
+  uint    idx;
+};
+
+static struct lisp_sort_same_ret
+lisp_symtab_sort_same(POOL_T* base_pp, uint base_idx, struct lisp_hash hash,
+                      const struct sort_t* sort) {
+  struct lisp_sort_same_ret ret = {
+    .pp  = base_pp,
+    .idx = base_idx,
+  };
+
+  POOL_T* pp = ret.pp;
+  uint    i  = ret.idx;
+
+  do {
+    struct lisp_sym* ppm = pp->mem;
+
+    for (i = ((pp == base_pp)? base_idx: 0); i < SYMPOOL; ++i) {
+      uint yie = sort->yield(ppm, i);
+
+      if (!sort->eq(yie, hash)) {
+        goto done;
+      }
+    }
+
+    pp = pp->next;
+  } while (pp->next);
+
+done:
+  ret.pp  = pp;
+  ret.idx = i;
+
+  return ret;
+}
+
+static struct lisp_sort_ret
+lisp_symtab_sort_small(const uint pp_idx, struct lisp_sym* mem,
+                       struct lisp_hash hash, const struct sort_t* sort) {
+  struct lisp_sort_ret ret = {
+    .master = -1u,
+  };
+
+  const uint base_idx = pp_idx;
+
+  // find the least small element with respect to `hash'
+  for (uint i = 0, lower = 0; i < pp_idx; ++i) {
+    uint yie = sort->yield(mem, i);
+
+    if (sort->lt(yie, hash)) {
+      if (yie > lower) {
+        ret.master = (i+1);
+      }
+    }
+
+    else if (sort->eq(yie, hash)) {
+      defer_for_as(ret.slave, SORT_NEXT);
+    }
+
+    else {
+      break;
+    }
+  }
+
+  defer_for_as(ret.slave, (pp_idx == base_idx)? SORT_RETURN: SORT_OK);
+
+  done_for(ret);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static void lisp_symtab_sort_base(POOL_T* pp, struct lisp_sym* ppm,
-                                  struct lisp_hash hash, uint idx,
-                                  struct sort_t* sort) {
-  POOL_T* base  = pp;
+static void lisp_symtab_sort_base(POOL_T* pp, uint idx, struct lisp_hash hash,
+                                  const struct sort_t* sort) {
+  POOL_T* cpp   = NULL, * base = pp;
   uint base_idx = idx;
-  uint pp_idx   = 0;
 
-  if (idx > 0) {
-    if (sort->good_ending(ppm, hash, (idx-1))) {
-      return;
-    }
+  struct lisp_sym* mem = pp->mem,
+                 * base_mem = base->mem;
 
-    // inclusively in between its base and its neighbour
-    if (sort->in_between(ppm, hash, 0, (idx-1))) {
-      int sstat = lisp_symtab_sort_small(&pp_idx, pp->idx, ppm, hash, sort);
+  // we're the biggest: the good ending
+  if (sort->good_ending(mem, hash, (idx-1))) {
+    return;
+  }
 
-      if (sstat == SORT_NEXT) {
+  do {
+    cpp = pp;
+    mem = pp->mem;
+    idx = pp->idx;
+
+    // inclusively in between its base and its neighbour: find the smallest, put
+    // ourselves one entry after it
+    if (sort->in_between(mem, hash, 0, (idx-1))) {
+      struct lisp_sort_ret sstat =
+        lisp_symtab_sort_small(pp->idx, mem, hash, sort);
+
+      if (sstat.slave == SORT_NEXT) {
         goto next;
       }
 
-      lisp_symtab_sort_backprog(base, base_idx, pp, pp_idx);
+      // we found something smaller than us with no repetition: the ok ending
+      lisp_symtab_sort_backprog(base, base_idx, pp, sstat.master);
       return;
     }
-  }
 
-  // smaller than its current thread
-  while (pp->prev) {
-    pp  = pp->prev;
-    ppm = pp->mem;
+    pp = pp->prev;
+  } while (pp);
 
-    // in this pool thread
-    if (sort->in_between(ppm, hash, 0, IDX_HM(SYMPOOL))) {
-      for (; pp_idx < SYMPOOL; ++pp_idx) {
-        // exclusively bigger: we have a gap; back-prog with the one we're on
-        if (sort->ex_between(ppm, hash, pp_idx, (pp_idx-1))) {
-          lisp_symtab_sort_backprog(base, base_idx, pp, (pp_idx - 1));
-          return;
-        }
-      }
-    }
-  }
+  pp  = cpp;
+  mem = pp->mem;
 
-  pp_idx    = 1;
-  int sstat = lisp_symtab_sort_small(&pp_idx, pp->idx, ppm, hash, sort);
+  struct lisp_sort_ret sstat = lisp_symtab_sort_small(pp->idx, mem, hash, sort);
 
-  switch (sstat) {
-  case SORT_RETURN:
-    return;
-  case SORT_NEXT:
+  if (sstat.slave == SORT_NEXT) {
     goto next;
   }
 
   // we tried to find something smaller us, if we hit this function we're
   // probably the smallest in the thread, so we swap with the base.
-  // this is the *worst* case, and is O(n) time-wise
-  lisp_symtab_sort_backprog(base, base_idx, pp, 0);
+  // this is the *worst* case, and is O(n) time-wise: the bad ending
+  lisp_symtab_sort_backprog(base, base_idx, pp,
+                            (sstat.master == -1u)? 0: sstat.master);
   return;
 
 next:
+  base_mem->hash.rep |= sort->mask;
+  struct lisp_sort_same_ret same =
+    lisp_symtab_sort_same(pp, sstat.master, hash, sort);
+
+  lisp_symtab_sort_backprog(base, base_idx, same.pp, same.idx);
+
   if (sort->next) {
-    lisp_symtab_sort_base(pp, ppm, hash, idx, sort->next);
+    lisp_symtab_sort_base(same.pp, same.idx, hash, sort->next);
   }
 }
 
@@ -227,15 +265,67 @@ next:
     if any of the fields above are the same, the next one in line will sort the
     entries. these functions are called on top of one another
 */
-static void lisp_symtab_sort(POOL_T* pp, struct lisp_hash hash, uint idx) {
-  struct lisp_sym* ppm = pp->mem;
-
+static void lisp_symtab_sort(POOL_T* pp, uint idx, struct lisp_hash hash) {
   // at the absolute beginning: do nothing
-  if (!pp->prev && !idx) {
+  if (!idx) {
     return;
   }
 
-  lisp_symtab_sort_base(pp, ppm, hash, idx, sort_entry);
+  lisp_symtab_sort_base(pp, idx, hash, sort_entry);
+}
+
+static struct lisp_sym_ret
+lisp_symtab_get_sorted(POOL_T* pp, struct lisp_hash hash,
+                       const struct sort_t* sort) {
+  POOL_T* cpp = NULL;
+  struct lisp_sym_ret ret = {0};
+
+  struct lisp_sym* mem = NULL;
+  uint mem_idx         = 0;
+
+  uint idx = 0;
+
+  do {
+    cpp     = pp;
+    mem     = pp->mem;
+    mem_idx = pp->idx;
+
+    // in between the current chunk
+    if (sort->in_between(mem, hash, 0, IDX_MH(mem_idx))) {
+      // find the smallest instance, or the only instance
+      for (uint i = 0; i < mem_idx; ++i) {
+        if (sort->eq(sort->yield(mem, i), hash)) {
+          if (sort->repeats(sort)) {
+            goto next;
+          }
+          ret.master = &mem[idx];
+          defer();
+        }
+      }
+    }
+
+    // this is actually the bad ending, I'm just reusing the function
+    if (sort->good_ending(mem, hash, IDX_HM(pp->idx))) {
+      defer_for_as(ret.slave, err(ENOTFOUND));
+    }
+
+    pp = pp->next;
+  } while (pp);
+
+  assert_for(ret.slave == 0, err(ENOTFOUND), ret.slave);
+
+next:
+  pp = cpp;
+
+  if (sort->next) {
+    ret = lisp_symtab_get_sorted(pp, hash, sort->next);
+    assert_for(ret.slave == 0, err(ENOTFOUND), ret.slave);
+  }
+  else {
+    assert_for(ret.slave == 0, err(ENOTFOUND), ret.slave);
+  }
+
+  done_for(ret);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -333,23 +423,33 @@ int lisp_symtab_set(struct lisp_sym sym) {
   DB_FMT("[ == ] symtab: adding at index %d\n---", idx);
   mpp->mem[IDX_HM(mpp->idx)] = sym;
 
-  lisp_symtab_sort(mpp, sym.hash, ppent_idx);
+  lisp_symtab_sort(mpp, ppent_idx, sym.hash);
 
   done_for(ret);
 }
 
 struct lisp_sym_ret lisp_symtab_get(struct lisp_hash hash) {
   struct lisp_sym_ret ret = {0};
-  uint idx = HASH_IDX(hash);
+  const uint idx = HASH_IDX(hash);
+
+  POOL_T* base_pp = symtab_pp[idx].base;
+
+  if (!base_pp->idx) {
+    defer_for_as(ret.slave, err(ENOTFOUND));
+  }
 
   DB_FMT("[ == ] symtab: trying to get index %d", idx);
 
-  POOL_T* pp = symtab_pp[idx].mem;
-  struct lisp_sym* tab = pp->mem;
+  ret = lisp_symtab_get_sorted(base_pp, hash, sort_entry);
+  assert_for(ret.slave == 0, OR_ERR(), ret.slave);
 
-  // TODO: stub; this is wrong in general
+  struct lisp_hash ghash = ret.master->hash;
 
-  ret.master = &pp->mem[0];
+  assert_for(
+    (ghash.sum == hash.sum)   &&
+    (ghash.psum == hash.psum) &&
+    (ghash.len == hash.len)   &&
+    (ghash.com_part = hash.com_part), err(ENOTFOUND), ret.slave);
 
   done_for(ret);
 }
@@ -362,8 +462,6 @@ int symtab_init(void) {
   sort_len.next  = &sort_sum;
   sort_sum.next  = &sort_psum;
   sort_psum.next = &sort_com_part;
-
-  sort_entry = &sort_len;
 
   return 0;
 }

@@ -83,11 +83,14 @@ int lisp_stack_lex_frame(struct lisp_stack* stack) {
   // it's guaranteed that if we're calling this function,
   // the first argument is expected to be a function
   struct lisp_sym_ret stret = lisp_symtab_get(stack->typ.lex.hash);
+  assert(stret.slave == 0, OR_ERR());
+
   struct lisp_sym* sym      = stret.master;
 
-  struct lisp_sym reg[sym->size[0]];
-
-  frame.tab.reg = reg;
+  {
+    struct lisp_sym reg[sym->size[0]];
+    frame.tab.reg = reg;
+  }
 
   // appease the compiler by letting the memory be allocated beforehand,
   // even though we know there's nothing here
