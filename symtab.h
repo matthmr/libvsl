@@ -82,6 +82,29 @@ struct lisp_sym {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+typedef bool (*good_ending_t) (struct lisp_sym* ppm, struct lisp_hash hash,
+                               uint idx);
+typedef bool (*in_between_t)  (struct lisp_sym* ppm, struct lisp_hash hash,
+                               uint lower, uint upper);
+typedef bool (*ex_between_t)  (struct lisp_sym* ppm, struct lisp_hash hash,
+                               uint lower, uint upper);
+typedef bool (*eq_t)          (uint n, struct lisp_hash hash);
+typedef bool (*lt_t)          (uint n, struct lisp_hash hash);
+typedef uint (*yield_t)       (struct lisp_sym* ppm, uint i);
+
+struct sort_t {
+  good_ending_t  good_ending;
+  in_between_t   in_between;
+  ex_between_t   ex_between;
+  eq_t           eq;
+  lt_t           lt;
+  yield_t        yield;
+
+  struct sort_t* next;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+
 struct clisp_sym {
   const char*     str; /** @str: the C-string representation of the symbol   */
   struct lisp_sym sym; /** @sym: the symbol template for the symtab          */
