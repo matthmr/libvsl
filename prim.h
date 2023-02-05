@@ -2,11 +2,29 @@
 #  define LOCK_PRIM
 
 // the symbol table is defined by CGEN
-#  ifdef PROVIDE_PRIM_SYMTAB
-#    include "symtab.h"
-#  endif
+#  include "symtab.h"
 
-#  include "utils.h"
+#  define CLISP_PRIM_FUN(__fun,_s0,_s1,_l0,_l1) \
+  {                                           \
+    .str = __fun,                             \
+    .sym = {                                  \
+      .typ  = __LISP_CLISP_FUN,               \
+      .dat  = "lisp_prim_" __fun,             \
+      .size = {_s0, _s1},                     \
+      .litr = {_l0, _l1},                     \
+    },                                        \
+  }
+
+#  define CLISP_PRIM_SYM(__sym,__val) \
+  {                                 \
+    .str = __sym,                   \
+    .sym = {                        \
+      .typ = __LISP_CLISP_SYM,      \
+      .dat = __val,                 \
+    },                              \
+  }
+
+extern const struct clisp_sym vsl_primtab[];
 
 struct lisp_fun_ret {
   void* master; // TODO

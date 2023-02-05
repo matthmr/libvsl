@@ -150,11 +150,11 @@
 
 // machine-human
 #  define IDX_MH(x) \
-  ((x) - 1)
+  ((x) + 1)
 
 // human-machine
 #  define IDX_HM(x) \
-  ((x) + 1)
+  ((x) - 1)
 
 typedef unsigned char  bool, uchar;
 typedef unsigned short ushort;

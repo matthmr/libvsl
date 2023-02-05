@@ -25,6 +25,7 @@ lisp_lex_ev(struct lisp_lex lex, enum lisp_lex_ev ev) {
   if (ev & __LISP_SYMBOL_OUT) {
     lex.master.ev &= ~__LISP_SYMBOL_IN;
     lex.master.ev |= __LISP_SYMBOL_OUT;
+    inc_hash_done(&lex.master.hash);
     DB_MSG("<- EV: symbol out");
   }
 
@@ -62,7 +63,6 @@ lisp_lex_ev(struct lisp_lex lex, enum lisp_lex_ev ev) {
 static inline struct lisp_lex
 lisp_lex_whitespace(struct lisp_lex lex) {
   if (lex.master.ev & __LISP_SYMBOL_IN) {
-    inc_hash_done();
     lex = lisp_lex_ev(lex, __LISP_SYMBOL_OUT);
 
     assert_for(lex.slave == 0, OR_ERR(), lex.slave);
@@ -85,7 +85,7 @@ lisp_lex_csym(struct lisp_lex lex, char c) {
     lex.slave       = ret.slave;
   }
 
-  DB_FMT("[ == ] libvsl: character (%c) (0x%x)", c, lex.master.hash.sum);
+  DB_FMT("[ == ] lex: character (%c) (%d)", c, lex.master.hash.sum);
 
   // it's *very* unlikely `inc_hash' is going to error, but if it does,
   // the user may be a bit puzzled as for why libvsl erroed, as it
