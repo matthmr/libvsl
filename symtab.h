@@ -90,8 +90,6 @@ struct lisp_sym {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-typedef bool (*good_ending_t) (struct lisp_sym* ppm, struct lisp_hash hash,
-                               uint idx);
 typedef bool (*in_between_t)  (struct lisp_sym* ppm, struct lisp_hash hash,
                                uint lower, uint upper);
 typedef bool (*ex_between_t)  (struct lisp_sym* ppm, struct lisp_hash hash,
@@ -102,7 +100,6 @@ typedef bool (*eq_t)          (uint n, struct lisp_hash hash);
 typedef bool (*lt_t)          (uint n, struct lisp_hash hash);
 
 struct sort_t {
-  good_ending_t good_ending;
   in_between_t  in_between;
   ex_between_t  ex_between;
   repeats_t     repeats;

@@ -5,11 +5,6 @@
 // TODO: implement lexical scoping
 
 #define SORT_FUNC_FOR(x) \
-  static inline bool good_ending__##x(struct lisp_sym* ppm,            \
-                                      struct lisp_hash hash,           \
-                                      uint idx) {                      \
-    return hash.x > ppm[idx].hash.x;                                   \
-  } \
   static inline bool in_between__##x(struct lisp_sym* ppm,             \
                                      struct lisp_hash hash,            \
                                      uint lower, uint upper) {         \
@@ -33,7 +28,6 @@
     return n < hash.x;                                                 \
   } \
   static struct sort_t sort_##x = {  \
-    .good_ending = good_ending__##x, \
     .in_between  = in_between__##x,  \
     .ex_between  = ex_between__##x,  \
     .repeats     = repeats__##x,     \
@@ -41,7 +35,7 @@
     .eq          = eq__##x,          \
     .lt          = lt__##x,          \
                                      \
-    .mask        = HASH__##x,        \
+    .mask        = 0,                \
     .next        = NULL,             \
   }
 
@@ -113,7 +107,7 @@ static void lisp_symtab_sort_backprog(POOL_T* from_pp, uint from_idx,
     tmpp = mem;
 
     // we're done :)
-    if (from_pp == to_pp) {
+    if (pp == to_pp) {
       return;
     }
   } while (++iter, pp->prev);
@@ -200,7 +194,7 @@ static void lisp_symtab_sort_base(POOL_T* pp, uint idx, struct lisp_hash hash,
                  * base_mem = base->mem;
 
   // we're the biggest: the good ending
-  if (sort->good_ending(mem, hash, (idx-1))) {
+  if (sort->lt(sort->yield(mem, IDX_HM(idx)), hash)) {
     return;
   }
 
@@ -211,7 +205,7 @@ static void lisp_symtab_sort_base(POOL_T* pp, uint idx, struct lisp_hash hash,
 
     // inclusively in between its base and its neighbour: find the smallest, put
     // ourselves one entry after it
-    if (sort->in_between(mem, hash, 0, (idx-1))) {
+    if (sort->in_between(mem, hash, 0, IDX_HM(idx))) {
       struct lisp_sort_ret sstat =
         lisp_symtab_sort_small(pp->idx, mem, hash, sort);
 
@@ -281,38 +275,38 @@ lisp_symtab_get_sorted(POOL_T* pp, struct lisp_hash hash,
   struct lisp_sym_ret ret = {0};
 
   struct lisp_sym* mem = NULL;
-  uint mem_idx         = 0;
 
   uint idx = 0;
 
   do {
-    cpp     = pp;
-    mem     = pp->mem;
-    mem_idx = pp->idx;
+    cpp = pp;
+    mem = pp->mem;
+    idx = pp->idx;
 
     // in between the current chunk
-    if (sort->in_between(mem, hash, 0, IDX_MH(mem_idx))) {
+    if (sort->in_between(mem, hash, 0, IDX_HM(idx))) {
       // find the smallest instance, or the only instance
-      for (uint i = 0; i < mem_idx; ++i) {
+      for (uint i = 0; i < idx; ++i) {
         if (sort->eq(sort->yield(mem, i), hash)) {
           if (sort->repeats(sort)) {
             goto next;
           }
-          ret.master = &mem[idx];
+
+          ret.master = &mem[IDX_HM(idx)];
           defer();
         }
       }
     }
 
-    // this is actually the bad ending, I'm just reusing the function
-    if (sort->good_ending(mem, hash, IDX_HM(pp->idx))) {
+    // `mem[pp->idx - 1].x < hash.x' means we're way out of range
+    if (sort->lt(sort->yield(mem, IDX_HM(pp->idx)), hash)) {
       defer_for_as(ret.slave, err(ENOTFOUND));
     }
 
     pp = pp->next;
   } while (pp);
 
-  assert_for(ret.slave == 0, err(ENOTFOUND), ret.slave);
+  assert_for(ret.master != NULL && ret.slave == 0, err(ENOTFOUND), ret.slave);
 
 next:
   pp = cpp;
@@ -446,10 +440,10 @@ struct lisp_sym_ret lisp_symtab_get(struct lisp_hash hash) {
   struct lisp_hash ghash = ret.master->hash;
 
   assert_for(
-    (ghash.sum == hash.sum)   &&
-    (ghash.psum == hash.psum) &&
-    (ghash.len == hash.len)   &&
-    (ghash.com_part = hash.com_part), err(ENOTFOUND), ret.slave);
+    (ghash.sum      == hash.sum)  &&
+    (ghash.psum     == hash.psum) &&
+    (ghash.len      == hash.len)  &&
+    (ghash.com_part == hash.com_part), err(ENOTFOUND), ret.slave);
 
   done_for(ret);
 }
