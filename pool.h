@@ -105,7 +105,6 @@ static POOL_RET_T pool_add_node(POOL_T* mpp) {
         defer_for_as(ret.stat, err(EOOM));
       }
 
-      mpp->next->idx  = 0;
       mpp->next->prev = mpp;
       mpp->next->next = NULL;
     }

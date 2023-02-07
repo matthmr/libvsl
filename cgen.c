@@ -50,6 +50,35 @@ static void write_string(char* string) {
   outbuf.idx = inc_idx;
 }
 
+static inline char conv_lisp_c(char c) {
+  switch (c) {
+  case '-':
+    c = '_';
+    break;
+  }
+
+  return c;
+}
+
+static void write_string_from_lisp(char* string) {
+  char* stri    = outbuf.string;
+  uint  inc_idx = outbuf.idx;
+
+  for (uint idx = 0; string[idx] != '\0'; ++inc_idx, ++idx) {
+    if (inc_idx == CGEN_OUTBUF) {
+      outbuf.idx = CGEN_OUTBUF;
+      write_file(STDOUT_FILENO);
+      inc_idx = 0;
+    }
+
+    // C is not as lenient as lisp we it comes to identifiers, so we need to
+    // convert some characters
+    stri[inc_idx] = conv_lisp_c(string[idx]);
+  }
+
+  outbuf.idx = inc_idx;
+}
+
 static inline void cgen_clear(void) {
   uint idx = outbuf.idx;
 
@@ -129,7 +158,7 @@ void cgen_field(char* name, enum cgen_typ typ, void* dat) {
     break;
   case CGEN_STRING:
     if (dat) {
-      write_string(dat);
+      write_string_from_lisp(dat);
     }
     break;
   }
