@@ -131,9 +131,9 @@ struct lisp_sym_ret {
 };
 
 enum lisp_sort_stat {
-  SORT_RETURN = -1,
-  SORT_OK     = 0,
-  SORT_NEXT   = 1,
+  __SORT_RETURN = -1,
+  __SORT_OK     = 0,
+  __SORT_NEXT   = 1,
 };
 
 struct lisp_sort_ret {

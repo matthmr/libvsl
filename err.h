@@ -21,10 +21,11 @@ enum ecode {
   EIDTOOBIG,
   EOOM,
   ENOTFOUND,
+  EHASHERR,
 };
 
-#  define ECODE_LEN (ENOTFOUND)
-#  define ERROR (-1)
+#  define ECODE_LEN (EHASHERR)
+#  define ERROR (-1u)
 
 #  if ECODE_LEN == ERROR
 #    error "[ !! ] libvsl: Too many errors (how did this even happen?)"

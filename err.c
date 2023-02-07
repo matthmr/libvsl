@@ -18,6 +18,8 @@ static const string_s emsg[] = {
   [EIDTOOBIG]       = ERR_STRING("libvsl", "identifier is too big"),
   [EOOM]            = ERR_STRING("libvsl", "out-of-memory malloc"),
   [ENOTFOUND]       = ERR_STRING("symtab", "symbol was not found"),
+  [EHASHERR]        =
+    ERR_STRING("symtab", "symbol cannot be determined because of a hash error"),
 };
 
 /** for now, this function is only called once and the entire
