@@ -90,14 +90,16 @@ struct lisp_sym {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-typedef bool (*in_between_t)  (struct lisp_sym* ppm, struct lisp_hash hash,
-                               uint lower, uint upper);
-typedef bool (*ex_between_t)  (struct lisp_sym* ppm, struct lisp_hash hash,
-                               uint lower, uint upper);
-typedef bool (*repeats_t)     (struct sort_t* sort);
-typedef uint (*yield_t)       (struct lisp_sym* ppm, uint i);
-typedef bool (*eq_t)          (uint n, struct lisp_hash hash);
-typedef bool (*lt_t)          (uint n, struct lisp_hash hash);
+struct sort_t;
+
+typedef bool (*in_between_t) (struct lisp_sym* ppm, struct lisp_hash hash,
+                              uint lower, uint upper);
+typedef bool (*ex_between_t) (struct lisp_sym* ppm, struct lisp_hash hash,
+                              uint lower, uint upper);
+typedef bool (*repeats_t)    (struct sort_t* sort);
+typedef uint (*yield_t)      (struct lisp_sym* ppm, uint i);
+typedef bool (*eq_t)         (uint n, struct lisp_hash hash);
+typedef bool (*lt_t)         (uint n, struct lisp_hash hash);
 
 struct sort_t {
   in_between_t  in_between;

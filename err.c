@@ -20,6 +20,7 @@ static const string_s emsg[] = {
   [ENOTFOUND]       = ERR_STRING("symtab", "symbol was not found"),
   [EHASHERR]        =
     ERR_STRING("symtab", "symbol cannot be determined because of a hash error"),
+  [ENOTALLOWED]     = ERR_STRING("lex", "character is not allowed in symbol"),
 };
 
 /** for now, this function is only called once and the entire

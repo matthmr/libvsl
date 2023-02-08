@@ -1,4 +1,5 @@
 #include "stack.h"
+#include "debug.h"
 #include "err.h"
 
 // TODO: some functions may change variables through a pointer
@@ -52,6 +53,8 @@ static int lisp_stack_lex_frame_var(struct lisp_frame* frame,
                                     struct lisp_sym* sym) {
   int ret = 0;
 
+  DB_MSG("[ == ] stack: lex_frame_var()");
+
   uint* size = sym->size;
 
   if (size[1]) {
@@ -76,6 +79,8 @@ int lisp_stack_lex_frame(struct lisp_stack* stack) {
   int ret = 0;
 
   struct lisp_frame frame;
+
+  DB_MSG("[ == ] stack: lex_frame()");
 
   frame.stack  = *stack;
   frame.tab.i  = 1;

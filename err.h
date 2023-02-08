@@ -22,9 +22,10 @@ enum ecode {
   EOOM,
   ENOTFOUND,
   EHASHERR,
+  ENOTALLOWED,
 };
 
-#  define ECODE_LEN (EHASHERR)
+#  define ECODE_LEN (ENOTALLOWED)
 #  define ERROR (-1u)
 
 #  if ECODE_LEN == ERROR

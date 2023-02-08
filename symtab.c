@@ -380,9 +380,9 @@ struct lisp_hash_ret inc_hash(struct lisp_hash hash, char c) {
 
   ASCII_NORM(c);
 
-  uchar prt_pre = hash.psum % SYMTAB_CELL;
-  hash.sum  += c*hash_i;
-  hash.psum += c;
+  uchar prt_pre  = hash.psum % SYMTAB_CELL;
+  hash.sum      += c*hash_i;
+  hash.psum     += c;
   uchar prt_post = c;
 
   hash_i *= SYMTAB_PRIM;
