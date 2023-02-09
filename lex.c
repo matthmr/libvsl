@@ -267,7 +267,6 @@ feed:
 static int parse_bytstream_base(struct lisp_stack* stack) {
   int ret = 0;
 
-feed:
   // feed `iobuf' with data from file descriptor `fd'
   lex.master.size = read(iofd, iobuf, IOBLOCK);
   lex.master.cb_i = 0;
@@ -283,6 +282,7 @@ feed:
   }
 
   // feed `iobuf' to the lexer, listen for callbacks
+lex:
   assert(lisp_lex_bytstream(stack) == 0, OR_ERR());
 
   /** NOTE: these are the only callbacks issued by `lisp_lex_bytstream'
@@ -308,13 +308,11 @@ feed:
   assert(lex.slave == 0, OR_ERR());
   assert(lex.master.paren == 0, err(EIMBALANCED));
 
-  if (lex.master.size) {
-    stack->ev     = 0;
-    lex.master.ev = 0;
+  stack->ev     = 0;
+  lex.master.ev = 0;
 
-    hash_done(&stack->typ.lex.hash);
-    goto feed;
-  }
+  hash_done(&stack->typ.lex.hash);
+  goto lex;
 
   done_for(ret);
 }
