@@ -15,7 +15,7 @@ static const char* __cgen_sym_typ[] = {
 static void __cgen_preamble(void) {
   cgen_notice();
   cgen_string(
-    LINE("#define PROVIDE_PRIM_SYMTAB") \
+    LINE("#define EXTERN_PRIM_FUNC") \
     LINE("#include \"prim.h\"")         \
     LINE(""));
 }

@@ -18,7 +18,7 @@ typedef int  (*lexer) (struct lisp_stack* stack);
 typedef void (*sexp_cb) (struct lisp_stack* stack);
 
 /** for both */
-typedef int  (*lisp_fun) (struct lisp_frame* frame);
+// typedef int  (*lisp_fun) (struct lisp_frame* frame);
 
 enum lisp_stack_ev {
   __STACK_POP        = BIT(0), /** for both */
@@ -53,6 +53,8 @@ enum lisp_stack_ev {
 #  define STACK_PUSHED(x) \
   (STACK_PUSHED_VAR(x) | (STACK_PUSHED_FUNC(x)))
 
+////////////////////////////////////////////////////////////////////////////////
+
 struct lisp_lex_stack {
   struct lisp_hash hash; /** @hash: the current hash      */
   lexer            cb;   /** @cb:   the callback function */
@@ -74,19 +76,21 @@ struct lisp_stack {
   enum lisp_stack_ev   ev;  /** @ev:   the stack event           */
 };
 
-struct lisp_frame_sym {
-  struct lisp_sym* reg; /** @reg:  the argument value register */
+struct lisp_frame_reg {
+  struct lisp_sym* dat; /** @dat:  the argument value register */
   uint size;            /** @size: the minimum functional size */
   uint i;               /** @i:    the current element index   */
 };
 
 struct lisp_frame {
   struct lisp_stack     stack;
-  struct lisp_frame_sym tab;
+  struct lisp_frame_reg reg;
 };
 
 #  define FRAME_LEXER(frame) \
   frame.stack.typ.lex.cb
+
+////////////////////////////////////////////////////////////////////////////////
 
 /**
   NOTE
@@ -111,8 +115,6 @@ struct lisp_frame {
                       lisp_lex_bytstream
                      parse_bytstream_base
  */
-
-/** SEXP stack -- BEGIN */
 void
 lisp_stack_sexp_push(struct lisp_stack* stack,
                      POOL_T* mpp, struct lisp_sexp* head);
@@ -124,13 +126,10 @@ lisp_stack_sexp_push_var(struct lisp_stack* stack, POOL_T* mpp,
 void
 lisp_stack_sexp_pop(struct lisp_stack* stack,
                     POOL_T* mpp, struct lisp_sexp* head);
-/** SEXP stack -- END */
 
-////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
-/** LEX stack -- BEGIN */
 int
 lisp_stack_lex_frame(struct lisp_stack* stack);
-/** LEX stack -- END */
 
 #endif

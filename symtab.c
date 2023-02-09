@@ -289,7 +289,8 @@ next:
   lisp_symtab_sort_backprog(base, base_idx, smstat.pp, smstat.idx);
 
   if (sort->next) {
-    lisp_symtab_sort_base(smstat.pp, smstat.idx, hash, sort->next);
+    assert(lisp_symtab_sort_base(smstat.pp, smstat.idx, hash, sort->next) == 0,
+           OR_ERR());
   }
   else {
     defer(err(EHASHERR));

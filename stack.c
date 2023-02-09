@@ -1,13 +1,21 @@
 #include "stack.h"
 #include "debug.h"
+#include "prim.h"
 #include "err.h"
 
 // TODO: some functions may change variables through a pointer
+// TODO: stub on the SEXP stack
 
-////////////////////////////////////////////////////////////
+static int lisp_stack_sexp_frame_var(struct lisp_frame* frame) {
+  int ret = 0;
+  done_for(ret);
+}
 
-// TODO: stub
-/** SEXP stack: BEGIN */
+static int lisp_stack_sexp_frame(struct lisp_stack* stack) {
+  int ret  = 0;
+  done_for(ret);
+}
+
 
 void lisp_stack_sexp_push(struct lisp_stack* stack, POOL_T* mpp,
                           struct lisp_sexp* head) {
@@ -35,126 +43,124 @@ void lisp_stack_sexp_pop(struct lisp_stack* stack, POOL_T* mpp,
   stack->typ.sexp.mpp  = mpp;
 }
 
-static int lisp_stack_sexp_frame_var(struct lisp_frame* frame) {
-  int ret = 0;
-  done_for(ret);
-}
-
-static int lisp_stack_sexp_frame(struct lisp_stack* stack) {
-  int ret  = 0;
-  done_for(ret);
-}
-/** SEXP stack: END */
-
 ////////////////////////////////////////////////////////////
 
-/** LEX stack: BEGIN */
-static int lisp_stack_lex_frame_var(struct lisp_frame* frame,
-                                    struct lisp_sym* sym) {
+static int lisp_stack_lex_frame_var(struct lisp_frame* frame, uint* size) {
   int ret = 0;
 
-  DB_MSG("[ == ] stack: lex_frame_var()");
+  DB_MSG("[ == ] stack(lex): frame_var()");
 
-  uint* size = sym->size;
+  // TODO: the lisp primitive functions have a iterative callback that can allow
+  // the existence of of bound(less) range of variables; that's not implemented
 
-  if (size[1]) {
-    assert((frame->tab.i < size[1]), err(EARGTOOBIG));
-  }
-  else if (size[0] == 0) {
+  // this function should not have been called
+  if (size[0] == 0) {
     defer_as(err(EARGTOOBIG));
+  }
+  else if (size[1] != INFINITY) {
+    assert((frame->reg.i > size[1]), err(EARGTOOBIG));
   }
 
   struct lisp_sym_ret stret = lisp_symtab_get(frame->stack.typ.lex.hash);
 
   assert(stret.slave == 0, OR_ERR());
 
-  // TODO: this is probably wrong
-  frame->tab.reg[frame->tab.i] = *stret.master;
+  // TODO: this is probably wrong; we *can* take things as pointers with
+  //       (ref x y)
+  frame->reg.dat[frame->reg.i] = *stret.master;
 
   done_for(ret);
 }
 
-// TODO: make the frame function check the grammar
+
+// TODO: the LISP functions' structure are out-of-date
 int lisp_stack_lex_frame(struct lisp_stack* stack) {
   int ret = 0;
 
-  struct lisp_frame frame;
+  struct lisp_frame frame  = {0};
+  struct lisp_fun_ret fret = {0};
 
-  DB_MSG("[ == ] stack: lex_frame()");
+  DB_MSG("[ == ] stack(lex): frame()");
 
-  frame.stack  = *stack;
-  frame.tab.i  = 1;
+  frame.stack = *stack;
+  frame.reg.i = 1;
 
   // it's guaranteed that if we're calling this function,
   // the first argument is expected to be a function
   struct lisp_sym_ret stret = lisp_symtab_get(stack->typ.lex.hash);
   assert(stret.slave == 0, OR_ERR());
 
-  struct lisp_sym* sym      = stret.master;
-
-  {
-    struct lisp_sym reg[sym->size[0]];
-    frame.tab.reg = reg;
-  }
-
-  // appease the compiler by letting the memory be allocated beforehand,
-  // even though we know there's nothing here
-  assert(stret.slave == 0, OR_ERR());
-  assert(sym->typ == __LISP_FUN && sym->dat != NULL,
+  struct lisp_sym sym = *stret.master;
+  assert(sym.typ == __LISP_FUN && sym.dat != NULL,
          err(EISNOTFUNC));
+
+  // allocate the memory; needs to be scoped because this branch does not always
+  // run in this function
+  {
+    // FIXME: this could be heap-allocated
+    struct lisp_sym reg[sym.size[0]];
+    frame.reg.dat = reg;
+  }
 
 yield:
   /** see if the root expr asked for literals. if so,
       then ask for the lexer to send its tokens to
       the SEXP tree
   */
-  if (sym->litr[0] &&
-      (frame.tab.i >= sym->litr[0] &&
-       (sym->litr[1] == -1 || frame.tab.i <= sym->litr[1]))) {
+  if ((frame.reg.i >= sym.litr[0]) &&
+      (sym.litr[1] == INFINITY || frame.reg.i <= sym.litr[1])) {
+    DB_FMT("[ == ] stack(lex): index %d is literal", frame.reg.i);
     frame.stack.ev |= __STACK_LIT;
     assert(FRAME_LEXER(frame) (&frame.stack) == 0, OR_ERR());
-    assert(lisp_stack_lex_frame_var(&frame, sym) == 0, OR_ERR());
-    ++frame.tab.i;
+    assert(lisp_stack_lex_frame_var(&frame, sym.size) == 0, OR_ERR());
+    ++frame.reg.i;
     goto yield;
   }
-  else {
-    assert(FRAME_LEXER(frame) (&frame.stack) == 0, OR_ERR());
-    ++frame.tab.i;
-  }
+
+  assert(FRAME_LEXER(frame) (&frame.stack) == 0, OR_ERR());
 
   enum lisp_stack_ev ev = frame.stack.ev;
 
   if (STACK_PUSHED_VAR(ev)) {
-    frame.stack.ev &= ~__STACK_PUSHED_VAR;
-    // assert(lisp_stack_lex_frame_var(&frame, sym) == 0, 1);
+    if (++frame.reg.i,
+        (sym.size[0] == 0 || frame.reg.i > sym.size[0])) {
+      defer_as(err(EARGTOOBIG));
+    }
 
-    if (STACK_POPPED(ev)) {
-      goto close_pop;
-    }
-    else {
-      goto yield;
-    }
+    frame.stack.ev &= ~__STACK_PUSHED_VAR;
+    assert(lisp_stack_lex_frame_var(&frame, sym.size) == 0, OR_ERR());
+    goto yield;
   }
 
   else if (STACK_PUSHED_FUNC(ev)) {
+    if (++frame.reg.i,
+        (sym.size[0] == 0 || frame.reg.i > sym.size[0])) {
+      defer_as(err(EARGTOOBIG));
+    }
+
     assert(lisp_stack_lex_frame(&frame.stack) == 0, OR_ERR());
     frame.stack.ev &= ~__STACK_PUSHED_FUNC;
 
     // TODO: i think this is wrong. the `frame_var' function
     // should be dealing with objects in the symbol table already
-    assert(lisp_stack_lex_frame_var(&frame, sym) == 0, OR_ERR());
+    assert(lisp_stack_lex_frame_var(&frame, sym.size) == 0, OR_ERR());
     goto yield;
   }
 
   else if (STACK_POPPED(ev)) {
-close_pop:
+pop:
+    if (sym.size[0] != 0 && frame.reg.i < sym.size[0]) {
+      defer_as(err(EARGTOOSMALL));
+    }
+
     frame.stack.ev &= ~__STACK_POPPED;
-    assert(
-      ((lisp_fun) sym->dat) (&frame) == 0, OR_ERR());
+
+    fret = ((lisp_fun) sym.dat) ((struct lisp_fun_arg) {
+        .size = {sym.size[0], sym.size[1]},
+        .litr = {sym.litr[0], sym.litr[1]},
+      });
+    defer_as(fret.slave);
   }
 
   done_for(ret);
 }
-/** LEX stack: END */
-
-////////////////////////////////////////////////////////////

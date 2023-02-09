@@ -36,6 +36,9 @@ struct lisp_fun_arg {
   uint litr[2];
 };
 
+typedef struct lisp_fun_ret (*lisp_fun) (struct lisp_fun_arg args);
+
+#  ifdef EXTERN_PRIM_FUNC
 struct lisp_fun_ret lisp_prim_set(struct lisp_fun_arg args);
 struct lisp_fun_ret lisp_prim_fun(struct lisp_fun_arg args);
 struct lisp_fun_ret lisp_prim_eval(struct lisp_fun_arg args);
@@ -54,5 +57,15 @@ struct lisp_fun_ret lisp_prim_cond(struct lisp_fun_arg args);
 struct lisp_fun_ret lisp_prim_behead(struct lisp_fun_arg args);
 struct lisp_fun_ret lisp_prim_head(struct lisp_fun_arg args);
 struct lisp_fun_ret lisp_prim_list(struct lisp_fun_arg args);
+struct lisp_fun_ret lisp_prim_parent(struct lisp_fun_arg args);
+struct lisp_fun_ret lisp_prim_type(struct lisp_fun_arg args);
+struct lisp_fun_ret lisp_prim_set_right_child(struct lisp_fun_arg args);
+struct lisp_fun_ret lisp_prim_left_child(struct lisp_fun_arg args);
+struct lisp_fun_ret lisp_prim_set_sibbling(struct lisp_fun_arg args);
+struct lisp_fun_ret lisp_prim_set_parent(struct lisp_fun_arg args);
+struct lisp_fun_ret lisp_prim_set_left_child(struct lisp_fun_arg args);
+struct lisp_fun_ret lisp_prim_ref(struct lisp_fun_arg args);
+struct lisp_fun_ret lisp_prim_right_child(struct lisp_fun_arg args);
+#  endif
 
 #endif
