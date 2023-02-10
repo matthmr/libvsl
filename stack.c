@@ -58,7 +58,7 @@ static int lisp_stack_lex_frame_var(struct lisp_frame* frame, uint* size) {
     defer_as(err(EARGTOOBIG));
   }
   else if (size[1] != INFINITY) {
-    assert((frame->reg.i > size[1]), err(EARGTOOBIG));
+    assert(frame->reg.i <= size[1], err(EARGTOOBIG));
   }
 
   struct lisp_sym_ret stret = lisp_symtab_get(frame->stack.typ.lex.hash);
@@ -67,7 +67,7 @@ static int lisp_stack_lex_frame_var(struct lisp_frame* frame, uint* size) {
 
   // TODO: this is probably wrong; we *can* take things as pointers with
   //       (ref x y)
-  frame->reg.dat[frame->reg.i] = *stret.master;
+  frame->reg.dat[IDX_HM(frame->reg.i)] = *stret.master;
 
   done_for(ret);
 }
@@ -83,7 +83,7 @@ int lisp_stack_lex_frame(struct lisp_stack* stack) {
   DB_MSG("[ == ] stack(lex): frame()");
 
   frame.stack = *stack;
-  frame.reg.i = 1;
+  frame.reg.i = 0;
 
   // it's guaranteed that if we're calling this function,
   // the first argument is expected to be a function
@@ -107,7 +107,7 @@ yield:
       then ask for the lexer to send its tokens to
       the SEXP tree
   */
-  if ((frame.reg.i >= sym.litr[0]) &&
+  if ((sym.litr[0] != 0 && frame.reg.i >= sym.litr[0]) &&
       (sym.litr[1] == INFINITY || frame.reg.i <= sym.litr[1])) {
     DB_FMT("[ == ] stack(lex): index %d is literal", frame.reg.i);
     frame.stack.ev |= __STACK_LIT;
