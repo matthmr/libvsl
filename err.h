@@ -26,8 +26,9 @@ enum ecode {
   ENOTALLOWED,
 };
 
-#  define ECODE_LEN (ENOTALLOWED)
-#  define ERROR (-1u)
+#  define ECODE_BEGIN (EOK)
+#  define ECODE_END   (ENOTALLOWED)
+#  define ERROR       (-1u)
 
 #  if ECODE_LEN == ERROR
 #    error "[ !! ] libvsl: Too many errors (how did this even happen?)"

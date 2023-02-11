@@ -74,13 +74,8 @@ static inline void lisp_lex_csym(char c) {
 }
 
 struct lisp_lex_ev_ret {
-  bool master;
-  int slave;   /**
-                  -2 -> defer (popped function while in literal)
-                  -1 -> defer (stop lexing)
-                   0 -> ok    (continue lexing)
-                   _ -> error
-                */
+  bool               master;
+  enum lisp_lex_stat slave;
 };
 
 static struct lisp_lex_ev_ret
@@ -98,11 +93,12 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
     lex.master.cb_idx  = IDX_MH(c_idx);
     lex.master.ev     &= ~__LISP_EV_PAREN_IN;
 
-    stack->typ.lex.paren = (lex.master.paren+1);
-
     if (STACK_QUOT(sev)) {
       // lisp_sexp_node_add(&SEXP_POOLP);
       defer_for_as(evret.slave, 0);
+    }
+    else {
+      stack->typ.lex.paren = (lex.master.paren+1);
     }
 
     if (prime) {
@@ -120,7 +116,6 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
     else {
       DB_MSG("[ == ] lex(ev): prime for stack");
       evret.master  = true;
-      stack->ev    |= __STACK_PUSH_FUNC;
       defer_for_as(evret.slave, 0);
     }
   }
@@ -142,8 +137,14 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
       stack->typ.lex.hash = lex.master.hash;
       hash_done(&lex.master.hash);
 
-      // go back to the frame
-      defer_for_as(evret.slave, -1);
+      if ((lex.master.paren+1) == stack->typ.lex.paren) {
+        // go back to the frame
+        defer_for_as(evret.slave, __LEX_DEFER);
+      }
+      else {
+        // TODO: what?
+        defer_for_as(evret.slave, __LEX_INPUT);
+      }
     }
 
     if (prime) {
@@ -156,7 +157,7 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
 
     stack->typ.lex.hash = lex.master.hash;
     hash_done(&lex.master.hash);
-    defer_for_as(evret.slave, -1);
+    defer_for_as(evret.slave, __LEX_DEFER);
   }
 
   // ...) -> pop
@@ -169,11 +170,11 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
 
     if (STACK_QUOT(sev)) {
       if ((lex.master.paren+1) == stack->typ.lex.paren) {
-        defer_for_as(evret.slave, -1);
+        defer_for_as(evret.slave, __LEX_DEFER);
       }
 
       else if ((lex.master.paren+1) < stack->typ.lex.paren) {
-        defer_for_as(evret.slave, -2);
+        defer_for_as(evret.slave, __LEX_POP_LITR);
       }
 
       else {
@@ -183,12 +184,11 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
 
     if (prime) {
       evret.master  = false;
-      stack->ev    &= ~__STACK_PUSHED;
       // stack->ev |= __STACK_EMPTY;
       // defer_for_as(evret.slave, 0); // wtf?
     }
 
-    defer_for_as(evret.slave, -1);
+    defer_for_as(evret.slave, __LEX_DEFER);
   }
 
   done_for(evret);
@@ -211,6 +211,17 @@ static inline void lisp_lex_c(char c) {
     lisp_lex_csym(c);
     break;
   }
+}
+
+static int parse_bytstream_feed(void) {
+  int ret = 0;
+
+  lex.master.size = read(iofd, iobuf, IOBLOCK);
+
+  assert(lex.master.size != -1, err(EREAD));
+  lex.master.cb_idx = 0;
+
+  done_for(ret);
 }
 
 static int lisp_lex_bytstream(struct lisp_stack* stack) {
@@ -238,17 +249,15 @@ feed:
     assert_for(evret.slave == 0, OR_ERR(), lex.slave);
   }
 
-  lex.master.ev |= __LISP_EV_FEED;
-
   if (size == 0) {
     assert(lex.master.paren == 0 && !(lex.master.ev & __LISP_EV_SYMBOL_IN),
            err(EIMBALANCED));
 
     // no error but also nothing else in the buffer: ask to stop
-    defer_as(-3);
+    defer_as(__LEX_INPUT);
   }
 
-  assert(parse_bytstream_base(stack) == 0, OR_ERR());
+  assert(parse_bytstream_feed() == 0, OR_ERR());
   goto feed;
 
   done_for(ret);
@@ -261,29 +270,18 @@ feed:
 static int parse_bytstream_base(struct lisp_stack* stack) {
   int ret = 0;
 
-  // feed `iobuf' with data from file descriptor `fd'
-  lex.master.size = read(iofd, iobuf, IOBLOCK);
-  lex.master.cb_idx = 0;
-
-  assert(lex.master.size != -1, err(EREAD));
-
-  // lexer exited with `feed' callback: immediately exit successfully
-  if (lex.master.ev & __LISP_EV_FEED) {
-    lex.master.ev &= ~__LISP_EV_FEED;
-    defer_as(0);
-  }
+  assert(parse_bytstream_feed() == 0, OR_ERR());
 
   // feed `iobuf' to the lexer, listen for callbacks
 lex:
   ret = lisp_lex_bytstream(stack);
 
   // no error, no input: exit
-  if (ret == -3) {
+  if (ret == __LEX_INPUT) {
     defer_as(0);
   }
 
-  // `-1' is normal defer
-  assert(ret == 0 || ret == -1, OR_ERR());
+  assert(ret == __LEX_OK || ret == __LEX_DEFER, OR_ERR());
 
   /** NOTE: these are the only callbacks issued by `lisp_lex_bytstream'
             that `parse_bytstream_base' can handle, the rest are handled

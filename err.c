@@ -41,7 +41,7 @@ int err(enum ecode ecode) {
     /** we can still use the `err' module to backwards-comply with
         frontend implementations that don't; they just have to error
         with the `ERROR' macro and `err' will work normally */
-    if (ecode <= ECODE_LEN) {
+    if (ecode >= ECODE_BEGIN && ecode <= ECODE_END) {
       write(STDERR_FILENO, emsg[ecode]._, emsg[ecode].size);
     }
   }

@@ -2,6 +2,7 @@
 #include "debug.h"
 #include "prim.h"
 #include "err.h"
+#include "lex.h"
 
 // TODO: some functions may change variables through a pointer
 // TODO: stub on the SEXP stack
@@ -125,16 +126,19 @@ yield_litr:
       (sym.litr[1] == INFINITY || IDX_MH(frame.reg.i) <= sym.litr[1])) {
     DB_FMT("[ == ] stack(lex): index %d is literal", frame.reg.i);
     frame.stack.ev |= __STACK_LIT;
+
+yield_litr_lexer:
     ret = LEXER(frame) (&frame.stack);
 
     // the function popped while reading literals
-    if (ret == -2) {
+    switch (ret) {
+    case __LEX_POP_LITR:
       // assert that what we have already is enough
       assert((sym.litr[0] != 0 && frame.reg.i >= sym.litr[0]) &&
              (sym.litr[1] == INFINITY || frame.reg.i <= sym.litr[1]),
              err(EARGTOOSMALL));
 
-      stack->ev &= ~__STACK_LIT;
+      frame.stack.ev &= ~__STACK_LIT;
 
       if (frame.reg.i > 0) {
         assert(lisp_stack_lex_frame_lit(&frame) == 0, OR_ERR());
@@ -142,6 +146,12 @@ yield_litr:
       }
 
       goto pop;
+      break;
+
+    // we're not done yet...
+    case __LEX_INPUT:
+      goto yield_litr_lexer;
+      break;
     }
 
     assert(ret == -1, OR_ERR());
@@ -151,7 +161,7 @@ yield_litr:
     goto yield_litr;
   }
   else {
-    stack->ev &= ~__STACK_LIT;
+    frame.stack.ev &= ~__STACK_LIT;
   }
 
 yield_exp:
@@ -179,8 +189,8 @@ yield_exp:
     }
 
     DB_FMT("[ == ] stack(lex): index %d is function", frame.reg.i);
-    assert(lisp_stack_lex_frame(&frame.stack) == 0, OR_ERR());
     frame.stack.ev &= ~__STACK_PUSHED_FUNC;
+    assert(lisp_stack_lex_frame(&frame.stack) == 0, OR_ERR());
 
     // assert(lisp_stack_lex_frame_var(&frame, sym.size) == 0, OR_ERR());
     ++frame.reg.i;

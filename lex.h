@@ -31,8 +31,13 @@ enum lisp_lex_ev {
 
   __LISP_EV_PAREN_IN   = BIT(2),
   __LISP_EV_SYMBOL_IN  = BIT(3),
+};
 
-  __LISP_EV_FEED       = BIT(4),
+enum lisp_lex_stat {
+  __LEX_INPUT    = -3,
+  __LEX_POP_LITR = -2,
+  __LEX_DEFER    = -1,
+  __LEX_OK       = 0,
 };
 
 struct lisp_lex_m {
