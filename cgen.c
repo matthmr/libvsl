@@ -99,7 +99,6 @@ void cgen_itoa_string(uint num) {
     return;
   }
 
-  DB_FMT("[ == ] cgen: `cgen_itoa_string' received number: %d", num);
 
   uint exp = 1;
   for (uint _num = num; _num >= 10; _num /= 10) {

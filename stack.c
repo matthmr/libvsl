@@ -43,12 +43,12 @@ void lisp_stack_sexp_pop(struct lisp_stack* stack, POOL_T* mpp,
   stack->typ.sexp.mpp  = mpp;
 }
 
-////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
 static int lisp_stack_lex_frame_var(struct lisp_frame* frame, uint* size) {
   int ret = 0;
 
-  DB_MSG("[ == ] stack(lex): frame_var()");
+  DB_MSG("[ == ] stack(lex): stack push variable");
 
   // TODO: the lisp primitive functions have a iterative callback that can allow
   // the existence of of bound(less) range of variables; that's not implemented
@@ -67,7 +67,21 @@ static int lisp_stack_lex_frame_var(struct lisp_frame* frame, uint* size) {
 
   // TODO: this is probably wrong; we *can* take things as pointers with
   //       (ref x y)
-  frame->reg.dat[IDX_HM(frame->reg.i)] = *stret.master;
+  // frame->reg.dat[frame->reg.i].mem.sym = *stret.master;
+
+  done_for(ret);
+}
+
+static inline int
+lisp_stack_lex_frame_lit(struct lisp_frame* frame) {
+  int ret = 0;
+
+  DB_MSG("[ == ] stack(lex): stack push literal");
+
+  // TODO: stub: this will *only* work if the literal is a symbol; this has to
+  // be cached to the SEXP tree, and then clean after the function pops. that
+  // way we can also take full SEXP trees as literals
+  frame->reg.dat[frame->reg.i].mem.hash = frame->stack.typ.lex.hash;
 
   done_for(ret);
 }
@@ -80,7 +94,7 @@ int lisp_stack_lex_frame(struct lisp_stack* stack) {
   struct lisp_frame frame  = {0};
   struct lisp_fun_ret fret = {0};
 
-  DB_MSG("[ == ] stack(lex): frame()");
+  DB_MSG("[ == ] stack(lex): stack push frame");
 
   frame.stack = *stack;
   frame.reg.i = 0;
@@ -98,57 +112,84 @@ int lisp_stack_lex_frame(struct lisp_stack* stack) {
   // run in this function
   {
     // FIXME: this could be heap-allocated
-    struct lisp_sym reg[sym.size[0]];
+    struct lisp_frame_reg_dat reg[sym.size[0]];
     frame.reg.dat = reg;
   }
 
-yield:
+yield_litr:
   /** see if the root expr asked for literals. if so,
       then ask for the lexer to send its tokens to
       the SEXP tree
   */
-  if ((sym.litr[0] != 0 && frame.reg.i >= sym.litr[0]) &&
-      (sym.litr[1] == INFINITY || frame.reg.i <= sym.litr[1])) {
+  if ((sym.litr[0] != 0 && IDX_MH(frame.reg.i) >= sym.litr[0]) &&
+      (sym.litr[1] == INFINITY || IDX_MH(frame.reg.i) <= sym.litr[1])) {
     DB_FMT("[ == ] stack(lex): index %d is literal", frame.reg.i);
     frame.stack.ev |= __STACK_LIT;
-    assert(FRAME_LEXER(frame) (&frame.stack) == 0, OR_ERR());
-    assert(lisp_stack_lex_frame_var(&frame, sym.size) == 0, OR_ERR());
+    ret = LEXER(frame) (&frame.stack);
+
+    // the function popped while reading literals
+    if (ret == -2) {
+      // assert that what we have already is enough
+      assert((sym.litr[0] != 0 && frame.reg.i >= sym.litr[0]) &&
+             (sym.litr[1] == INFINITY || frame.reg.i <= sym.litr[1]),
+             err(EARGTOOSMALL));
+
+      stack->ev &= ~__STACK_LIT;
+
+      if (frame.reg.i > 0) {
+        assert(lisp_stack_lex_frame_lit(&frame) == 0, OR_ERR());
+        ++frame.reg.i;
+      }
+
+      goto pop;
+    }
+
+    assert(ret == -1, OR_ERR());
+    //assert(lisp_stack_lex_frame_lit(&frame) == 0, OR_ERR());
     ++frame.reg.i;
-    goto yield;
+
+    goto yield_litr;
+  }
+  else {
+    stack->ev &= ~__STACK_LIT;
   }
 
-  assert(FRAME_LEXER(frame) (&frame.stack) == 0, OR_ERR());
+yield_exp:
+  ret = LEXER(frame) (&frame.stack);
+
+  assert(ret == 0 || ret == -1, OR_ERR());
 
   enum lisp_stack_ev ev = frame.stack.ev;
 
   if (STACK_PUSHED_VAR(ev)) {
-    if (++frame.reg.i,
-        (sym.size[0] == 0 || frame.reg.i > sym.size[0])) {
+    if (sym.size[0] == 0 || IDX_MH(frame.reg.i) > sym.size[0]) {
       defer_as(err(EARGTOOBIG));
     }
 
+    DB_FMT("[ == ] stack(lex): index %d is variable", frame.reg.i);
     frame.stack.ev &= ~__STACK_PUSHED_VAR;
     assert(lisp_stack_lex_frame_var(&frame, sym.size) == 0, OR_ERR());
-    goto yield;
+    ++frame.reg.i;
+    goto yield_exp;
   }
 
   else if (STACK_PUSHED_FUNC(ev)) {
-    if (++frame.reg.i,
-        (sym.size[0] == 0 || frame.reg.i > sym.size[0])) {
+    if (sym.size[0] == 0 || IDX_MH(frame.reg.i) > sym.size[0]) {
       defer_as(err(EARGTOOBIG));
     }
 
+    DB_FMT("[ == ] stack(lex): index %d is function", frame.reg.i);
     assert(lisp_stack_lex_frame(&frame.stack) == 0, OR_ERR());
     frame.stack.ev &= ~__STACK_PUSHED_FUNC;
 
-    // TODO: i think this is wrong. the `frame_var' function
-    // should be dealing with objects in the symbol table already
-    assert(lisp_stack_lex_frame_var(&frame, sym.size) == 0, OR_ERR());
-    goto yield;
+    // assert(lisp_stack_lex_frame_var(&frame, sym.size) == 0, OR_ERR());
+    ++frame.reg.i;
+    goto yield_exp;
   }
 
   else if (STACK_POPPED(ev)) {
 pop:
+    DB_MSG("[ == ] stack(lex): stack popped");
     if (sym.size[0] != 0 && frame.reg.i < sym.size[0]) {
       defer_as(err(EARGTOOSMALL));
     }

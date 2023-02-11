@@ -38,8 +38,7 @@ enum lisp_lex_ev {
 struct lisp_lex_m {
   enum lisp_lex_ev ev;     /** @ev:     the lex event                    */
   uint             paren;  /** @paren:  the paren level                  */
-  uint             parenl; /** @parenl: the paren level in a literal     */
-  uint             cb_i;   /** @cb_i:   the bytstream character index    */
+  uint             cb_idx; /** @cb_idx: the bytstream character index    */
   uint             size;   /** @size:   the bytstream (significant) size */
   struct lisp_hash hash;   /** @chash:  the symbol hash                  */
 };

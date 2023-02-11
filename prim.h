@@ -40,6 +40,7 @@ typedef struct lisp_fun_ret (*lisp_fun) (struct lisp_fun_arg args);
 
 #  ifdef EXTERN_PRIM_FUNC
 struct lisp_fun_ret lisp_prim_set(struct lisp_fun_arg args);
+struct lisp_fun_ret lisp_prim_del(struct lisp_fun_arg args);
 struct lisp_fun_ret lisp_prim_fun(struct lisp_fun_arg args);
 struct lisp_fun_ret lisp_prim_eval(struct lisp_fun_arg args);
 struct lisp_fun_ret lisp_prim_quot(struct lisp_fun_arg args);

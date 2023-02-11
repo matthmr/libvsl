@@ -56,8 +56,9 @@ enum lisp_stack_ev {
 ////////////////////////////////////////////////////////////////////////////////
 
 struct lisp_lex_stack {
-  struct lisp_hash hash; /** @hash: the current hash      */
-  lexer            cb;   /** @cb:   the callback function */
+  struct lisp_hash hash;  /** @hash:  the current hash      */
+  uint             paren; /** @paren: the paren level       */
+  lexer            cb;    /** @cb:    the callback function */
 };
 
 struct lisp_sexp_stack {
@@ -76,10 +77,30 @@ struct lisp_stack {
   enum lisp_stack_ev   ev;  /** @ev:   the stack event           */
 };
 
+enum lisp_frame_reg_t {
+  __FRAME_VAR_GEN = 0,
+  __FRAME_VAR_SYMP,
+  __FRAME_VAR_SYM,
+  __FRAME_VAR_HASH,
+  __FRAME_VAR_SEXP,
+};
+
+union lisp_frame_reg_m {
+  struct lisp_sym*  sym;  /** @sym:  a symbol pointer; for (ref) and alike */
+  struct lisp_hash  hash; /** @hash: a hash; for most set/get quotes       */
+  struct lisp_sexp* sexp; /** @sexp: a sexp; for most general quotes       */
+  void*             gen;  /** @gen:  generic memory; casted by the caller  */
+};
+
+struct lisp_frame_reg_dat {
+  enum lisp_frame_reg_t  typ; /** @typ: the type of the memory */
+  union lisp_frame_reg_m mem; /** @mem: the memory             */
+};
+
 struct lisp_frame_reg {
-  struct lisp_sym* dat; /** @dat:  the argument value register */
-  uint size;            /** @size: the minimum functional size */
-  uint i;               /** @i:    the current element index   */
+  struct lisp_frame_reg_dat* dat; /** @dat:  the argument value register */
+  uint size;                      /** @size: the minimum functional size */
+  uint i;                         /** @i:    the current element index   */
 };
 
 struct lisp_frame {
@@ -87,7 +108,7 @@ struct lisp_frame {
   struct lisp_frame_reg reg;
 };
 
-#  define FRAME_LEXER(frame) \
+#  define LEXER(frame) \
   frame.stack.typ.lex.cb
 
 ////////////////////////////////////////////////////////////////////////////////

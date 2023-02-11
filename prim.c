@@ -4,6 +4,7 @@
 const struct clisp_sym vsl_primtab[] = {
   // turing completion
   CLISP_PRIM_FUN("set", 2, 2, 1, 1), // (set 'x y)
+  CLISP_PRIM_FUN("del", 1, 1, 1, 1), // (del 'x)
   CLISP_PRIM_FUN("ref", 2, 2, 2, 2), // (ref 'x 'y)
 
   // NOTE: (fun (...) ...) is a lambda
@@ -183,6 +184,11 @@ struct lisp_fun_ret lisp_prim_ref(struct lisp_fun_arg args) {
 }
 
 struct lisp_fun_ret lisp_prim_right_child(struct lisp_fun_arg args) {
+  struct lisp_fun_ret ret = {0};
+  return ret;
+}
+
+struct lisp_fun_ret lisp_prim_del(struct lisp_fun_arg args) {
   struct lisp_fun_ret ret = {0};
   return ret;
 }

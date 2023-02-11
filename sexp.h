@@ -2,7 +2,7 @@
 #  define LOCK_SEXP
 
 #  ifndef SEXPPOOL
-#    define SEXPPOOL (64)
+#    define SEXPPOOL (32)
 #  endif
 
 #  define LOCK_SYMTAB_INTERNALS
@@ -39,6 +39,7 @@ struct pos_t {
                  mirroed by `pool.h:MEMPOOL::idx' */
 };
 
+// TODO: add `struct lisp_sym` as a type
 union node_t {
   struct lisp_hash sym;
   struct pos_t     pos;
