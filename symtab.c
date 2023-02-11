@@ -67,6 +67,13 @@ static inline int mod_norm(int val, int len) {
   return val - s(len);
 }
 
+static inline bool hash_eq(struct lisp_hash hash_a, struct lisp_hash hash_b) {
+  return (hash_a.sum == hash_b.sum)  &&
+    (hash_a.psum     == hash_b.psum) &&
+    (hash_a.len      == hash_b.len)  &&
+    (hash_a.com_part == hash_b.com_part);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 /**              to_pp        from_pp
@@ -456,15 +463,9 @@ static struct lisp_sym_ret lisp_symtab_get_for_set(struct lisp_hash hash) {
   DB_FMT("[ == ] symtab(get-for-set): trying to get index %d", idx);
 
   ret = lisp_symtab_get_sorted(base_pp, hash, sort_entry);
+
   assert_for(ret.slave == 0, 1, ret.slave);
-
-  struct lisp_hash ghash = ret.master->hash;
-
-  assert_for(
-    (ghash.sum      == hash.sum)  &&
-    (ghash.psum     == hash.psum) &&
-    (ghash.len      == hash.len)  &&
-    (ghash.com_part == hash.com_part), 1, ret.slave);
+  assert_for(hash_eq(ret.master->hash, hash), 1, ret.slave);
 
   done_for(ret);
 }
@@ -521,13 +522,7 @@ struct lisp_sym_ret lisp_symtab_get(struct lisp_hash hash) {
   ret = lisp_symtab_get_sorted(base_pp, hash, sort_entry);
   assert_for(ret.slave == 0, err(ENOTFOUND), ret.slave);
 
-  struct lisp_hash ghash = ret.master->hash;
-
-  assert_for(
-    (ghash.sum      == hash.sum)  &&
-    (ghash.psum     == hash.psum) &&
-    (ghash.len      == hash.len)  &&
-    (ghash.com_part == hash.com_part), err(ENOTFOUND), ret.slave);
+  assert_for(hash_eq(ret.master->hash, hash), err(ENOTFOUND), ret.slave);
 
   done_for(ret);
 }
