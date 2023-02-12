@@ -1,4 +1,6 @@
 #define EXTERN_PRIM_FUNC
+
+#include "debug.h"
 #include "prim.h"
 
 const struct clisp_sym vsl_primtab[] = {
@@ -6,9 +8,8 @@ const struct clisp_sym vsl_primtab[] = {
   CLISP_PRIM_FUN("set", 2, 2, 1, 1), // (set 'x y)
   CLISP_PRIM_FUN("del", 1, 1, 1, 1), // (del 'x)
   CLISP_PRIM_FUN("ref", 2, 2, 2, 2), // (ref 'x 'y)
-
-  // NOTE: (fun (...) ...) is a lambda
-  CLISP_PRIM_FUN("fun", 1, INFINITY, 1, 2), // (fun 'x? (...) ...)
+  CLISP_PRIM_FUN("fun", 2, INFINITY, 1, 2), // (fun 'x (...) ...)
+  CLISP_PRIM_FUN("lam", 1, INFINITY, 1, 1), // (lam (...) ...)
 
   CLISP_PRIM_FUN("if", 2, 3, 0, 0), // (if x y z?)
   CLISP_PRIM_FUN("eq", 2, 2, 0, 0), // (eq x y)
@@ -42,10 +43,9 @@ const struct clisp_sym vsl_primtab[] = {
   CLISP_PRIM_SYM("nil", "NULL"),
 
   // types
-  CLISP_PRIM_SYM("boolt", "NULL"),
-  CLISP_PRIM_SYM("symt", "NULL"),
-  CLISP_PRIM_SYM("listt", "NULL"),
-  CLISP_PRIM_SYM("treet", "NULL"),
+  CLISP_PRIM_SYM("@sym", "NULL"),
+  CLISP_PRIM_SYM("@sexp", "NULL"),
+  CLISP_PRIM_SYM("@lexp", "NULL"),
 
   // EOL
   {.str = NULL},
@@ -53,142 +53,267 @@ const struct clisp_sym vsl_primtab[] = {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-struct lisp_fun_ret lisp_prim_set(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_set(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_set");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_fun(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_fun(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_fun");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_eval(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_lam(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_lam");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_quot(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_eval(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_eval");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_if(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_quot(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_quot");
+
+  ret.master.argv = sym->size[0];
+  ret.master.argp->mem.sym = sym;
+  ret.master.argp->typ     = __LISP_FUN_VAR_SYM;
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_eq(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_if(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_if");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_not(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_eq(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_eq");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_block(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_not(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_not");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_while(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_block(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_block");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_break(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_while(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_while");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_continue(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_break(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_break");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_return(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_continue(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_continue");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_goto(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_return(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_return");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_label(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_goto(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_goto");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_cond(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_label(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_label");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_behead(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_cond(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_cond");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_head(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_behead(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_behead");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_list(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_head(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_head");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_parent(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_list(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_list");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_type(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_parent(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_parent");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_set_right_child(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_type(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_type");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_left_child(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_set_right_child(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_set_right_child");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_set_sibbling(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_left_child(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_left_child");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_set_parent(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_set_sibbling(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
-  return ret;
-};
 
-struct lisp_fun_ret lisp_prim_set_left_child(struct lisp_fun_arg args) {
-  struct lisp_fun_ret ret = {0};
-  return ret;
-}
+  DB_MSG("-> lisp_prim_set_sibbling");
 
-struct lisp_fun_ret lisp_prim_ref(struct lisp_fun_arg args) {
-  struct lisp_fun_ret ret = {0};
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_right_child(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_set_parent(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_set_parent");
+
   return ret;
 }
 
-struct lisp_fun_ret lisp_prim_del(struct lisp_fun_arg args) {
+struct lisp_fun_ret
+lisp_prim_set_left_child(struct lisp_fun_arg args, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_set_left_child");
+
+  return ret;
+}
+
+struct lisp_fun_ret
+lisp_prim_ref(struct lisp_fun_arg args, struct lisp_sym* sym) {
+  struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_ref");
+
+  return ret;
+}
+
+struct lisp_fun_ret
+lisp_prim_right_child(struct lisp_fun_arg args, struct lisp_sym* sym) {
+  struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_right_child");
+
+  return ret;
+}
+
+struct lisp_fun_ret
+lisp_prim_del(struct lisp_fun_arg args, struct lisp_sym* sym) {
+  struct lisp_fun_ret ret = {0};
+
+  DB_MSG("-> lisp_prim_del");
+
   return ret;
 }

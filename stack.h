@@ -7,6 +7,7 @@
 
 #  include "sexp.h"
 #  include "pool.h"
+#  include "prim.h"
 
 struct lisp_stack;
 struct lisp_frame;
@@ -77,35 +78,15 @@ struct lisp_stack {
   enum lisp_stack_ev   ev;  /** @ev:   the stack event           */
 };
 
-enum lisp_frame_reg_t {
-  __FRAME_VAR_GEN = 0,
-  __FRAME_VAR_SYMP,
-  __FRAME_VAR_SYM,
-  __FRAME_VAR_HASH,
-  __FRAME_VAR_SEXP,
-};
-
-union lisp_frame_reg_m {
-  struct lisp_sym*  sym;  /** @sym:  a symbol pointer; for (ref) and alike */
-  struct lisp_hash  hash; /** @hash: a hash; for most set/get quotes       */
-  struct lisp_sexp* sexp; /** @sexp: a sexp; for most general quotes       */
-  void*             gen;  /** @gen:  generic memory; casted by the caller  */
-};
-
-struct lisp_frame_reg_dat {
-  enum lisp_frame_reg_t  typ; /** @typ: the type of the memory */
-  union lisp_frame_reg_m mem; /** @mem: the memory             */
-};
-
 struct lisp_frame_reg {
-  struct lisp_frame_reg_dat* dat; /** @dat:  the argument value register */
-  uint size;                      /** @size: the minimum functional size */
-  uint i;                         /** @i:    the current element index   */
+  struct lisp_fun_arg _; /** @_: the argument register     */
+  uint i;                /** @i: the current element index */
 };
 
 struct lisp_frame {
   struct lisp_stack     stack;
   struct lisp_frame_reg reg;
+  //struct lisp_fun_ret   pop;
 };
 
 #  define LEXER(frame) \
@@ -136,21 +117,17 @@ struct lisp_frame {
                       lisp_lex_bytstream
                      parse_bytstream_base
  */
-void
-lisp_stack_sexp_push(struct lisp_stack* stack,
-                     POOL_T* mpp, struct lisp_sexp* head);
+void lisp_stack_sexp_push(struct lisp_stack* stack,
+                          POOL_T* mpp, struct lisp_sexp* head);
 
-void
-lisp_stack_sexp_push_var(struct lisp_stack* stack, POOL_T* mpp,
-                         struct lisp_sexp* head, enum lisp_stack_ev ev);
+void lisp_stack_sexp_push_var(struct lisp_stack* stack, POOL_T* mpp,
+                              struct lisp_sexp* head, enum lisp_stack_ev ev);
 
-void
-lisp_stack_sexp_pop(struct lisp_stack* stack,
-                    POOL_T* mpp, struct lisp_sexp* head);
+void lisp_stack_sexp_pop(struct lisp_stack* stack,
+                         POOL_T* mpp, struct lisp_sexp* head);
 
 ////////////////////////////////////////////////////////////////////////////////
 
-int
-lisp_stack_lex_frame(struct lisp_stack* stack);
+struct lisp_fun_ret lisp_stack_lex_frame(struct lisp_stack* stack);
 
 #endif

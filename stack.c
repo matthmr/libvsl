@@ -1,6 +1,5 @@
 #include "stack.h"
 #include "debug.h"
-#include "prim.h"
 #include "err.h"
 #include "lex.h"
 
@@ -46,7 +45,8 @@ void lisp_stack_sexp_pop(struct lisp_stack* stack, POOL_T* mpp,
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static int lisp_stack_lex_frame_var(struct lisp_frame* frame, uint* size) {
+static int
+lisp_stack_lex_frame_var(struct lisp_frame* frame, struct lisp_sym sym) {
   int ret = 0;
 
   DB_MSG("[ == ] stack(lex): stack push variable");
@@ -54,12 +54,18 @@ static int lisp_stack_lex_frame_var(struct lisp_frame* frame, uint* size) {
   // TODO: the lisp primitive functions have a iterative callback that can allow
   // the existence of of bound(less) range of variables; that's not implemented
 
+  frame->stack.ev &= ~__STACK_PUSHED_VAR;
+
   // this function should not have been called
-  if (size[0] == 0) {
+  if (sym.size[0] == 0 ||
+      (sym.size[1] != INFINITY && IDX_MH(frame->reg.i) > sym.size[1])) {
     defer_as(err(EARGTOOBIG));
   }
-  else if (size[1] != INFINITY) {
-    assert(frame->reg.i <= size[1], err(EARGTOOBIG));
+  if (sym.size[0] == 0) {
+    defer_as(err(EARGTOOBIG));
+  }
+  else if (sym.size[1] != INFINITY) {
+    assert(frame->reg.i <= sym.size[1], err(EARGTOOBIG));
   }
 
   struct lisp_sym_ret stret = lisp_symtab_get(frame->stack.typ.lex.hash);
@@ -70,6 +76,7 @@ static int lisp_stack_lex_frame_var(struct lisp_frame* frame, uint* size) {
   //       (ref x y)
   // frame->reg.dat[frame->reg.i].mem.sym = *stret.master;
 
+  ++frame->reg.i;
   done_for(ret);
 }
 
@@ -82,39 +89,53 @@ lisp_stack_lex_frame_lit(struct lisp_frame* frame) {
   // TODO: stub: this will *only* work if the literal is a symbol; this has to
   // be cached to the SEXP tree, and then clean after the function pops. that
   // way we can also take full SEXP trees as literals
-  frame->reg.dat[frame->reg.i].mem.hash = frame->stack.typ.lex.hash;
+  frame->reg._.argp[frame->reg.i].mem.hash = frame->stack.typ.lex.hash;
 
   done_for(ret);
 }
 
+static inline int
+lisp_stack_lex_frame_pop_to(struct lisp_frame* frame,
+                            struct lisp_fun_mem* arg) {
+  // NOTE: this function is clear of *size assertion* errors
 
-// TODO: the LISP functions' structure are out-of-date
-int lisp_stack_lex_frame(struct lisp_stack* stack) {
   int ret = 0;
 
-  struct lisp_frame frame  = {0};
-  struct lisp_fun_ret fret = {0};
+  // TODO: stub
+  frame->reg._.argp[frame->reg.i].mem.gen = arg->mem.gen;
+
+  ++frame->reg.i;
+  done_for(ret);
+}
+
+
+struct lisp_fun_ret lisp_stack_lex_frame(struct lisp_stack* stackp) {
+  int ret                 = 0;
+
+  struct lisp_fun_ret pop = {0};
+  struct lisp_frame frame = {0};
 
   DB_MSG("[ == ] stack(lex): stack push frame");
 
-  frame.stack = *stack;
-  frame.reg.i = 0;
+  frame.stack     = *stackp;
+  frame.reg.i     = 0;
+  frame.stack.ev &= ~__STACK_PUSHED_FUNC;
 
-  // it's guaranteed that if we're calling this function,
-  // the first argument is expected to be a function
-  struct lisp_sym_ret stret = lisp_symtab_get(stack->typ.lex.hash);
+  struct lisp_sym_ret stret = lisp_symtab_get(stackp->typ.lex.hash);
   assert(stret.slave == 0, OR_ERR());
 
   struct lisp_sym sym = *stret.master;
-  assert(sym.typ == __LISP_FUN && sym.dat != NULL,
-         err(EISNOTFUNC));
+  assert((sym.typ == __LISP_FUN && sym.dat != NULL), err(EISNOTFUNC));
 
   // allocate the memory; needs to be scoped because this branch does not always
   // run in this function
   {
     // FIXME: this could be heap-allocated
-    struct lisp_frame_reg_dat reg[sym.size[0]];
-    frame.reg.dat = reg;
+    struct lisp_fun_mem argp[sym.size[0]];
+    frame.reg._ = (struct lisp_fun_arg) {
+      .argp = argp,
+      .argv = sym.size[0],
+    };
   }
 
 yield_litr:
@@ -144,14 +165,10 @@ yield_litr_lexer:
         assert(lisp_stack_lex_frame_lit(&frame) == 0, OR_ERR());
         ++frame.reg.i;
       }
-
       goto pop;
-      break;
 
-    // we're not done yet...
     case __LEX_INPUT:
       goto yield_litr_lexer;
-      break;
     }
 
     assert(ret == -1, OR_ERR());
@@ -167,33 +184,28 @@ yield_litr_lexer:
 yield_exp:
   ret = LEXER(frame) (&frame.stack);
 
-  assert(ret == 0 || ret == -1, OR_ERR());
+  assert((ret == 0 || ret == -1), OR_ERR());
 
   enum lisp_stack_ev ev = frame.stack.ev;
 
-  if (STACK_PUSHED_VAR(ev)) {
-    if (sym.size[0] == 0 || IDX_MH(frame.reg.i) > sym.size[0]) {
-      defer_as(err(EARGTOOBIG));
-    }
+  // TODO: 'pop' the function with a mask, that way the function can keep
+  // calling itself and receiving the extra arguments
 
-    DB_FMT("[ == ] stack(lex): index %d is variable", frame.reg.i);
-    frame.stack.ev &= ~__STACK_PUSHED_VAR;
-    assert(lisp_stack_lex_frame_var(&frame, sym.size) == 0, OR_ERR());
-    ++frame.reg.i;
+  if (STACK_PUSHED_VAR(ev)) {
+    assert(lisp_stack_lex_frame_var(&frame, sym) == 0, OR_ERR());
     goto yield_exp;
   }
 
   else if (STACK_PUSHED_FUNC(ev)) {
-    if (sym.size[0] == 0 || IDX_MH(frame.reg.i) > sym.size[0]) {
+    if (sym.size[0] == 0 ||
+        (sym.size[1] != INFINITY && IDX_MH(frame.reg.i) > sym.size[1])) {
       defer_as(err(EARGTOOBIG));
     }
 
-    DB_FMT("[ == ] stack(lex): index %d is function", frame.reg.i);
-    frame.stack.ev &= ~__STACK_PUSHED_FUNC;
-    assert(lisp_stack_lex_frame(&frame.stack) == 0, OR_ERR());
+    pop = lisp_stack_lex_frame(&frame.stack);
+    assert(pop.slave == 0, OR_ERR());
 
-    // assert(lisp_stack_lex_frame_var(&frame, sym.size) == 0, OR_ERR());
-    ++frame.reg.i;
+    assert(lisp_stack_lex_frame_pop_to(&frame, pop.master.argp) == 0, OR_ERR());
     goto yield_exp;
   }
 
@@ -206,12 +218,8 @@ pop:
 
     frame.stack.ev &= ~__STACK_POPPED;
 
-    fret = ((lisp_fun) sym.dat) ((struct lisp_fun_arg) {
-        .size = {sym.size[0], sym.size[1]},
-        .litr = {sym.litr[0], sym.litr[1]},
-      });
-    defer_as(fret.slave);
+    return ((lisp_fun) sym.dat) (frame.reg._, &sym);
   }
 
-  done_for(ret);
+  done_for_with(pop, pop.slave = ret);
 }

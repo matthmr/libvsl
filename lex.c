@@ -297,7 +297,7 @@ lex:
       stack->ev &= ~__STACK_EMPTY;
     }
     else {
-      lex.slave = lisp_stack_lex_frame(stack);
+      lex.slave = lisp_stack_lex_frame(stack).slave;
     }
   }
 
