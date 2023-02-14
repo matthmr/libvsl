@@ -22,7 +22,7 @@
           need to fix the length of the identifiers. 94 characters should be
           enough, for example:
 
-          aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          the-quick-brown-fox-jumps-over-the-lazy-dog-can-fit-in-the-name-and-i-still-got-some-size-left
  */
 // maximum number of characters per symbol
 #  define SYMTAB_MAX_SYM (94)

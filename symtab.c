@@ -344,7 +344,7 @@ lisp_symtab_get_sorted(POOL_T* pp, struct lisp_hash hash,
             goto next;
           }
 
-          ret.master = &mem[IDX_HM(idx)];
+          ret.master = (mem+i);
           defer();
         }
       }
@@ -464,8 +464,8 @@ static struct lisp_sym_ret lisp_symtab_get_for_set(struct lisp_hash hash) {
 
   ret = lisp_symtab_get_sorted(base_pp, hash, sort_entry);
 
-  assert_for(ret.slave == 0, 1, ret.slave);
-  assert_for(hash_eq(ret.master->hash, hash), 1, ret.slave);
+  assert_for(ret.slave == 0 && hash_eq(ret.master->hash, hash),
+             1, ret.slave);
 
   done_for(ret);
 }
@@ -501,7 +501,6 @@ int lisp_symtab_set(struct lisp_sym sym) {
   mpp->mem[IDX_HM(pp_idx)] = sym;
 
   ret = lisp_symtab_sort(mpp, pp_idx, sym.hash);
-
   assert(ret == 0, OR_ERR());
 
   done_for(ret);
@@ -520,9 +519,8 @@ struct lisp_sym_ret lisp_symtab_get(struct lisp_hash hash) {
   DB_FMT("[ == ] symtab: trying to get index %d", idx);
 
   ret = lisp_symtab_get_sorted(base_pp, hash, sort_entry);
-  assert_for(ret.slave == 0, err(ENOTFOUND), ret.slave);
-
-  assert_for(hash_eq(ret.master->hash, hash), err(ENOTFOUND), ret.slave);
+  assert_for(ret.slave == 0 && hash_eq(ret.master->hash, hash),
+             err(ENOTFOUND), ret.slave);
 
   done_for(ret);
 }
