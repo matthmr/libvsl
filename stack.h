@@ -5,21 +5,12 @@
 #  define LOCK_POOL_DEF
 #  define LOCK_POOL_THREAD
 
-#  include "sexp.h"
-#  include "pool.h"
-#  include "prim.h"
+#  include "sexp.h" // also includes `symtab.h' (lock internals)
+#  include "pool.h" // also includes `err.h', `utils.h', `stdlib.h'
+#  include "prim.h" // also includes `symtab.h'
 
 struct lisp_stack;
 struct lisp_frame;
-
-/** for LEX */
-typedef int  (*lexer) (struct lisp_stack* stack);
-
-/** for SEXP */
-typedef void (*sexp_cb) (struct lisp_stack* stack);
-
-/** for both */
-// typedef int  (*lisp_fun) (struct lisp_frame* frame);
 
 enum lisp_stack_ev {
   __STACK_POP        = BIT(0), /** for both */
@@ -59,13 +50,11 @@ enum lisp_stack_ev {
 struct lisp_lex_stack {
   struct lisp_hash hash;  /** @hash:  the current hash      */
   uint             paren; /** @paren: the paren level       */
-  lexer            cb;    /** @cb:    the callback function */
 };
 
 struct lisp_sexp_stack {
   struct lisp_sexp* head; /** @head: the current sexp head   */
   POOL_T*           mpp;  /** @mpp:  the current pool thread */
-  sexp_cb           cb;   /** @cb:   the callback function   */
 };
 
 union lisp_stack_typ {
@@ -79,18 +68,16 @@ struct lisp_stack {
 };
 
 struct lisp_frame_reg {
-  struct lisp_fun_arg _; /** @_: the argument register     */
-  uint i;                /** @i: the current element index */
+  struct lisp_fun_arg* _; /** @_: the argument register     */
+  uint i;                 /** @i: the current element index */
 };
 
 struct lisp_frame {
-  struct lisp_stack     stack;
-  struct lisp_frame_reg reg;
-  //struct lisp_fun_ret   pop;
+  struct lisp_stack     stack; /** @stack: the current stack state       */
+  struct lisp_symc_ret  sym;   /** @sym:   the current function          */
+  struct lisp_frame_reg reg;   /** @reg:   the argument register         */
+  struct lisp_fun_ret   pop;   /** @pop:   the value from a function pop */
 };
-
-#  define LEXER(frame) \
-  frame.stack.typ.lex.cb
 
 ////////////////////////////////////////////////////////////////////////////////
 

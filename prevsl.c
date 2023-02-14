@@ -51,8 +51,11 @@ static int compile_prim(void) {
 static int prevsl(void) {
   int ret = 0;
 
-  assert(compile_grammar() == 0, OR_ERR());
-  assert(compile_prim() == 0, OR_ERR());
+  ret = compile_grammar();
+  assert(ret == 0, OR_ERR());
+
+  ret = compile_prim();
+  assert(ret == 0, OR_ERR());
 
   done_for(ret);
 }

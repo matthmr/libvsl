@@ -5,11 +5,10 @@
 #include "debug.h"
 #include "prim.h"  // also include `symtab.h'
 #include "cgen.h"
-#include "err.h"
 
 static const char* __cgen_sym_typ[] = {
-  [__LISP_CLISP_FUN] = "__LISP_FUN",
-  [__LISP_CLISP_SYM] = "__LISP_SYM",
+  [__LISP_CLISP_FUN] = "__LISP_VAR_FUN",
+  [__LISP_CLISP_SYM] = "__LISP_VAR_SYM",
 };
 
 static void __cgen_preamble(void) {

@@ -48,11 +48,11 @@
  */
 
 #  ifndef POOL_ENTRY_T
-#    error [ !! ] No POOL_ENTRY_T macro defined in the includer. Cannot compile
+#    error "[ !! ] libvsl(cc): No POOL_ENTRY_T macro defined in the includer. Cannot compile"
 #  endif
 
 #  ifndef POOL_AM
-#    error [ !! ] No POOL_AM macro defined in the includer. Cannot compile
+#    error "[ !! ] libvsl(cc): No POOL_AM macro defined in the includer. Cannot compile"
 #  endif
 
 MEMPOOL(POOL_ENTRY_T, POOL_AM);

@@ -6,6 +6,7 @@
 #  endif
 
 #  define LOCK_SYMTAB_INTERNALS
+
 #  include "symtab.h"
 
 enum sexp_t {

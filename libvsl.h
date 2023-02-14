@@ -21,9 +21,8 @@ extern Frontend frontend;
 #    include <stdlib.h>
 #    include <unistd.h>
 
-#    define  LOCK_SEXP_INTERNALS
-#    include "sexp.h"
-#    include "lex.h"
+#    include "sexp.h" // also includes `symtab.h'
+#    include "lex.h"  // also includes `symtab.h', `stack.h'
 
 #  endif
 

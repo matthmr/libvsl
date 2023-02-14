@@ -460,7 +460,6 @@ int lisp_sexp_eval(POOL_T* mpp) {
   stack.typ.sexp = (struct lisp_sexp_stack) {
     .mpp  = mpp,
     .head = root,
-    .cb   = &lisp_sexp_trans,
   };
 
   lisp_sexp_trans(&stack);

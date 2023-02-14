@@ -14,10 +14,12 @@ int main(void) {
   symtab_init();
 
   if (frontend) {
-    assert(frontend() == 0, err(EFRONTEND));
+    ret = frontend();
+    assert(ret == 0, err(EFRONTEND));
   }
 
-  assert(parse_bytstream(STDIN_FILENO) == 0, OR_ERR());
+  ret = parse_bytstream(STDIN_FILENO);
+  assert(ret == 0, OR_ERR());
 
   done_for(ret);
 }

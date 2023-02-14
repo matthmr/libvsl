@@ -1,7 +1,6 @@
 #include <unistd.h>
 
 #include "debug.h"
-#include "stack.h" // also includes `sexp.h'
 #include "lex.h"   // also includes `symtab.h'
 
 #undef LOCK_POOL_THREAD
@@ -16,9 +15,6 @@ static struct lisp_lex lex  = {0};
 
 static int iofd             = 0;
 static char iobuf[IOBLOCK];
-
-// I fucking hate C
-static int parse_bytstream_base(struct lisp_stack* stack);
 
 static void lisp_lex_ev(enum lisp_lex_ev ev) {
   if (ev & __LISP_EV_SYMBOL_OUT) {
@@ -217,14 +213,74 @@ static int parse_bytstream_feed(void) {
   int ret = 0;
 
   lex.master.size = read(iofd, iobuf, IOBLOCK);
-
   assert(lex.master.size != -1, err(EREAD));
+
   lex.master.cb_idx = 0;
 
   done_for(ret);
 }
 
-static int lisp_lex_bytstream(struct lisp_stack* stack) {
+/** at any given time, there's at most *two* of this function in the call stack:
+      - one as the stack base
+      - another as a callback from the lexer asking for more bytes
+ */
+static int parse_bytstream_base(struct lisp_stack* stack) {
+  int ret = parse_bytstream_feed();
+
+  assert(ret == 0, OR_ERR());
+
+  // feed `iobuf' to the lexer, listen for callbacks
+lex:
+  ret = lisp_lex_bytstream(stack);
+
+  // no error, no input: exit
+  if (ret == __LEX_INPUT) {
+    defer_as(0);
+  }
+
+  assert(ret == __LEX_OK || ret == __LEX_DEFER, OR_ERR());
+
+  /** NOTE: these are the only callbacks issued by `lisp_lex_bytstream'
+            that `parse_bytstream_base' can handle, the rest are handled
+            by the stack frame
+   */
+
+  // push function
+  if (STACK_PUSHED_FUNC(stack->ev)) {
+    stack->ev &= ~__STACK_PUSHED_FUNC;
+
+    // TODO: this should return `nil'; and the stack should also know about this
+    if (stack->ev & __STACK_EMPTY) {
+      stack->ev &= ~__STACK_EMPTY;
+    }
+    else {
+      lex.slave = lisp_stack_lex_frame(stack).slave;
+    }
+  }
+
+  // push variable (top level)
+  else if (STACK_PUSHED_VAR(stack->ev)) {
+    stack->ev &= ~__STACK_PUSHED_VAR;
+
+    DB_MSG("TODO: implement top level symbol resolution");
+  }
+
+  // give the parent error precedence over `EIMBALANCED'
+  assert(lex.slave == 0, OR_ERR());
+  assert(lex.master.paren == 0, err(EIMBALANCED));
+
+  stack->ev     = 0;
+  lex.master.ev = 0;
+
+  hash_done(&stack->typ.lex.hash);
+  goto lex;
+
+  done_for(ret);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+int lisp_lex_bytstream(struct lisp_stack* stack) {
   static bool prime = false;
 
   int  ret  = 0;
@@ -263,71 +319,10 @@ feed:
   done_for(ret);
 }
 
-/** at any given time, there's at most *two* of this function in the call stack:
-      - one as the stack base
-      - another as a callback from the lexer asking for more bytes
- */
-static int parse_bytstream_base(struct lisp_stack* stack) {
-  int ret = 0;
-
-  assert(parse_bytstream_feed() == 0, OR_ERR());
-
-  // feed `iobuf' to the lexer, listen for callbacks
-lex:
-  ret = lisp_lex_bytstream(stack);
-
-  // no error, no input: exit
-  if (ret == __LEX_INPUT) {
-    defer_as(0);
-  }
-
-  assert(ret == __LEX_OK || ret == __LEX_DEFER, OR_ERR());
-
-  /** NOTE: these are the only callbacks issued by `lisp_lex_bytstream'
-            that `parse_bytstream_base' can handle, the rest are handled
-            by the stack frame
-   */
-
-  // push function
-  if (STACK_PUSHED_FUNC(stack->ev)) {
-    stack->ev &= ~__STACK_PUSHED_FUNC;
-
-    // TODO: this should return `nil'; and the stack should also know about this
-    if (stack->ev & __STACK_EMPTY) {
-      stack->ev &= ~__STACK_EMPTY;
-    }
-    else {
-      lex.slave = lisp_stack_lex_frame(stack).slave;
-    }
-  }
-
-  // push variable (top level)
-  else if (STACK_PUSHED_VAR(stack->ev)) {
-    stack->ev &= ~__STACK_PUSHED_VAR;
-
-    DB_MSG("TODO: implement top level symbol resolution");
-  }
-
-  assert(lex.slave == 0, OR_ERR());
-  assert(lex.master.paren == 0, err(EIMBALANCED));
-
-  stack->ev     = 0;
-  lex.master.ev = 0;
-
-  hash_done(&stack->typ.lex.hash);
-  goto lex;
-
-  done_for(ret);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
 int parse_bytstream(int fd) {
   iofd = fd;
 
   struct lisp_stack stack;
-
-  stack.typ.lex.cb = &lisp_lex_bytstream;
 
   lex.master.ev = 0;
   lex.slave     = 0;

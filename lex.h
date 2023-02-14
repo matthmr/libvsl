@@ -2,7 +2,9 @@
 #  define LOCK_LEX
 
 #  define LOCK_SYMTAB_INTERNALS
-#  include "symtab.h"
+
+#  include "symtab.h" // also includes `utils.h'
+#  include "stack.h"  // also includes `sexp.h'
 
 #  ifndef IOBLOCK
 #    define IOBLOCK (4096)
@@ -54,5 +56,6 @@ struct lisp_lex {
 };
 
 int parse_bytstream(int fd);
+int lisp_lex_bytstream(struct lisp_stack* stack);
 
 #endif

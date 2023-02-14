@@ -1,6 +1,5 @@
-#include "symtab.h"
+#include "symtab.h" // also includes `pool.h'
 #include "debug.h"
-#include "err.h"
 
 // TODO: implement lexical scoping
 

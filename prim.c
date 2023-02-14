@@ -54,7 +54,7 @@ const struct clisp_sym vsl_primtab[] = {
 ////////////////////////////////////////////////////////////////////////////////
 
 struct lisp_fun_ret
-lisp_prim_set(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_set(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_set");
@@ -63,7 +63,7 @@ lisp_prim_set(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_fun(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_fun(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_fun");
@@ -72,7 +72,7 @@ lisp_prim_fun(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_lam(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_lam(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_lam");
@@ -81,7 +81,7 @@ lisp_prim_lam(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_eval(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_eval(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_eval");
@@ -90,20 +90,19 @@ lisp_prim_eval(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_quot(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_quot(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_quot");
 
-  ret.master.argv = sym->size[0];
-  ret.master.argp->mem.sym = sym;
-  ret.master.argp->typ     = __LISP_FUN_VAR_SYM;
+  ret.master.mem.hash = argp[0].mem.hash;
+  ret.master.typ      = __LISP_VAR_HASH;
 
   return ret;
 }
 
 struct lisp_fun_ret
-lisp_prim_if(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_if(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_if");
@@ -112,7 +111,7 @@ lisp_prim_if(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_eq(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_eq(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_eq");
@@ -121,7 +120,7 @@ lisp_prim_eq(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_not(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_not(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_not");
@@ -130,7 +129,7 @@ lisp_prim_not(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_block(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_block(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_block");
@@ -139,7 +138,7 @@ lisp_prim_block(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_while(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_while(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_while");
@@ -148,7 +147,7 @@ lisp_prim_while(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_break(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_break(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_break");
@@ -157,7 +156,7 @@ lisp_prim_break(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_continue(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_continue(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_continue");
@@ -166,7 +165,7 @@ lisp_prim_continue(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_return(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_return(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_return");
@@ -175,7 +174,7 @@ lisp_prim_return(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_goto(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_goto(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_goto");
@@ -184,7 +183,7 @@ lisp_prim_goto(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_label(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_label(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_label");
@@ -193,7 +192,7 @@ lisp_prim_label(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_cond(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_cond(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_cond");
@@ -202,7 +201,7 @@ lisp_prim_cond(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_behead(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_behead(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_behead");
@@ -211,7 +210,7 @@ lisp_prim_behead(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_head(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_head(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_head");
@@ -220,7 +219,7 @@ lisp_prim_head(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_list(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_list(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_list");
@@ -229,7 +228,7 @@ lisp_prim_list(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_parent(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_parent(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_parent");
@@ -238,7 +237,7 @@ lisp_prim_parent(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_type(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_type(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_type");
@@ -247,7 +246,8 @@ lisp_prim_type(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_set_right_child(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_set_right_child(struct lisp_fun_arg* argp, uint argv,
+                          struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_set_right_child");
@@ -256,7 +256,8 @@ lisp_prim_set_right_child(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_left_child(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_left_child(struct lisp_fun_arg* argp, uint argv,
+                     struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_left_child");
@@ -265,7 +266,8 @@ lisp_prim_left_child(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_set_sibbling(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_set_sibbling(struct lisp_fun_arg* argp, uint argv,
+                       struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_set_sibbling");
@@ -274,7 +276,8 @@ lisp_prim_set_sibbling(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_set_parent(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_set_parent(struct lisp_fun_arg* argp, uint argv,
+                     struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_set_parent");
@@ -283,7 +286,8 @@ lisp_prim_set_parent(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_set_left_child(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_set_left_child(struct lisp_fun_arg* argp, uint argv,
+                         struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_set_left_child");
@@ -292,7 +296,7 @@ lisp_prim_set_left_child(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_ref(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_ref(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_ref");
@@ -301,7 +305,8 @@ lisp_prim_ref(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_right_child(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_right_child(struct lisp_fun_arg* argp, uint argv,
+                      struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_right_child");
@@ -310,7 +315,7 @@ lisp_prim_right_child(struct lisp_fun_arg args, struct lisp_sym* sym) {
 }
 
 struct lisp_fun_ret
-lisp_prim_del(struct lisp_fun_arg args, struct lisp_sym* sym) {
+lisp_prim_del(struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_del");
