@@ -180,8 +180,10 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
 
     if (prime) {
       evret.master  = false;
-      // stack->ev |= __STACK_EMPTY;
-      // defer_for_as(evret.slave, 0); // wtf?
+
+      // takes precendence over `__STACK_POP'
+      stack->ev |= __STACK_PUSH_FUNC;
+      stack->typ.lex.hash = (struct lisp_hash) {0};
     }
 
     defer_for_as(evret.slave, __LEX_DEFER);
@@ -248,14 +250,7 @@ lex:
   // push function
   if (STACK_PUSHED_FUNC(stack->ev)) {
     stack->ev &= ~__STACK_PUSHED_FUNC;
-
-    // TODO: this should return `nil'; and the stack should also know about this
-    if (stack->ev & __STACK_EMPTY) {
-      stack->ev &= ~__STACK_EMPTY;
-    }
-    else {
-      lex.slave = lisp_stack_lex_frame(stack).slave;
-    }
+    lex.slave = lisp_stack_lex_frame(stack).slave;
   }
 
   // push variable (top level)

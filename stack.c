@@ -202,6 +202,8 @@ yield_exp:
   }
 
   else if (STACK_PUSHED_FUNC(ev)) {
+    DB_MSG("[ == ] stack(lex): stack push function");
+
     frame.stack.ev &= ~__STACK_PUSHED_FUNC;
 
     if (frame.sym.m.size[0] == 0 ||
@@ -215,12 +217,19 @@ yield_exp:
 
     assert(lisp_stack_lex_frame_pop_to(&frame, frame.pop.master) == 0,
            OR_ERR());
+
+    // () also sets __STACK_POP
+    if (STACK_POPPED(ev)) {
+      goto pop;
+    }
+
     goto yield_exp;
   }
 
   else if (STACK_POPPED(ev)) {
 pop:
     DB_MSG("[ == ] stack(lex): stack popped");
+
     if (frame.sym.m.size[0] != 0 &&
         frame.reg.i < frame.sym.m.size[0]) {
       defer_as(err(EARGTOOSMALL));
