@@ -79,7 +79,7 @@ struct lisp_fun_ret lisp_stack_lex_frame(struct lisp_stack* stackp) {
   DB_MSG("[ == ] stack(lex): stack push frame");
 
   struct lisp_frame frame = {0};
-  frame.sym.p     = lisp_symtab_get(stackp->typ.lex.hash);
+  frame.sym.p     = lisp_symtab_get(stackp->typ.lex.mem.hash);
 
   frame.stack     = *stackp;
   frame.reg.i     = 1;
@@ -183,7 +183,7 @@ yield_exp:
       defer_as(err(EARGTOOBIG));
     }
     else {
-      frame.sym.pv = lisp_symtab_get(frame.stack.typ.lex.hash);
+      frame.sym.pv = lisp_symtab_get(frame.stack.typ.lex.mem.hash);
       assert(frame.sym.pv.slave == 0, OR_ERR());
 
       // frame.reg._[frame.reg.i].mem.sym = frame.sym.pv.master;

@@ -249,7 +249,7 @@ CLISP_PRIM(parent) {
 
   DB_MSG("-> lisp_prim_parent()");
 
-  return ret;
+  done_for(ret);
 }
 
 CLISP_PRIM(type) {

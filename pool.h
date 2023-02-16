@@ -13,7 +13,8 @@
    POOL_T {                 \
     struct __mempool* next; \
     struct __mempool* prev; \
-    uint idx;               \
+    uint c_idx;             \
+    uint p_idx;             \
     t mem[am];              \
   }
 
@@ -24,14 +25,13 @@
    @mem:   memory pool
    @next:  next section
    @prev:  previous section
-   @idx:   index of the current section within the pool chain; also used as
-           length. use the `IDX_HM' macro from `utils.h' to use it as an array
-           index
+   @c_idx: index of the current section within the pool chain
+   @p_idx: index of the current element within the pool thread
  */
 
 #  define MEMPOOL_RET(t)    \
   POOL_RET_T {              \
-    struct __mempool* mem;  \
+    struct __mempool* new;  \
     struct __mempool* base; \
     t*   entry;             \
     int  stat;              \
@@ -41,7 +41,7 @@
    MEMPOOL_RET(t)
    --------------
 
-   @mem:   current memory pool        (what we attach, child)
+   @new:   current memory pool        (what we attach, child)
    @base:  base memory pool           (what we attach to, root)
    @entry: current memory pool entry
    @stat:  exit status
@@ -67,7 +67,8 @@ static POOL_T __mempool_t = {
   .mem   = {0},
   .next  = NULL,
   .prev  = NULL,
-  .idx   = 0,
+  .c_idx = 0,
+  .p_idx = 0,
 };
 #  define POOL __mempool_t
 
@@ -88,13 +89,13 @@ static POOL_T* __mempool_tp = &__mempool_t;
  */
 static POOL_RET_T pool_add_node(POOL_T* mpp) {
   POOL_RET_T ret = {
-    .mem   = NULL,
+    .new   = NULL,
     .base  = mpp,
     .entry = NULL,
     .stat  = 0,
   };
 
-  if (mpp->idx == POOL_AM) {
+  if (mpp->p_idx == POOL_AM) {
     if (!mpp->next) {
       // TODO: even though this has no way to get leaked,
       //       free it when exiting `main'; also
@@ -105,17 +106,18 @@ static POOL_RET_T pool_add_node(POOL_T* mpp) {
         defer_for_as(ret.stat, err(EOOM));
       }
 
-      mpp->next->prev = mpp;
-      mpp->next->next = NULL;
+      mpp->next->prev  = mpp;
+      mpp->next->next  = NULL;
+      mpp->next->c_idx = mpp->c_idx + 1;
     }
 
-    mpp->next->idx = 0;
-    mpp            = mpp->next;
+    mpp->next->p_idx = 0;
+    mpp              = mpp->next;
   }
 
-  ret.mem   = mpp;
-  ret.entry = (mpp->mem + mpp->idx);
-  ++mpp->idx;
+  ret.new   = mpp;
+  ret.entry = (mpp->mem + mpp->p_idx);
+  ++mpp->p_idx;
 
   done_for(ret);
 }
@@ -123,13 +125,14 @@ static POOL_RET_T pool_add_node(POOL_T* mpp) {
 /**
    Gets a memory pool thread from a given index
 
-   @mpp: the current pool thread
-   @idx: the given index
+   @mpp:   the current pool thread
+   @c_idx: the given index
  */
-static POOL_RET_T pool_from_idx(POOL_T* mpp, uint idx) {
+static POOL_RET_T pool_from_idx(POOL_T* mpp, uint c_idx) {
   POOL_RET_T ret = {0};
   POOL_T* pp     = mpp;
-  int diff = (idx - mpp->idx);
+  int diff       = (c_idx - mpp->c_idx);
+  ret.base       = pp;
 
   if (diff > 0) {
     for (; diff; --diff) {
@@ -142,9 +145,8 @@ static POOL_RET_T pool_from_idx(POOL_T* mpp, uint idx) {
     }
   }
 
-  ret.entry  =
-    (ret.mem = pp)->mem;
-  ret.base   = mpp;
+  ret.new   = pp;
+  ret.entry = pp->mem;
 
   return ret;
 }

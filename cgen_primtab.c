@@ -72,7 +72,7 @@ static void __cgen_transpile_sym_future(char* field, char* future, uint idx) {
 static void __cgen_transpile_sym_data(POOL_T* pp, uint idx, uint pidx,
                                       bool in_array) {
   struct lisp_sym* sym = pp->mem;
-  uint am = pp->idx;
+  uint am = pp->p_idx;
 
   cgen_string("\n    ");
 
@@ -95,7 +95,8 @@ static void __cgen_transpile_sym_data(POOL_T* pp, uint idx, uint pidx,
     cgen_field("next",  CGEN_STRING,  "NULL");
   }
 
-  cgen_field("idx",   CGEN_INT,     &pp->idx);
+  cgen_field("p_idx", CGEN_INT,     &pp->p_idx);
+  cgen_field("c_idx", CGEN_INT,     &pp->c_idx);
   cgen_field("mem",   CGEN_RECURSE, NULL);
 
   FOR_EACH_TABENT(i, am) {
@@ -196,7 +197,7 @@ static int __cgen_transpile_sym(struct lisp_symtab_pp* stab_pp) {
   FOR_EACH_TABENT(i, SYMTAB_CELL) {
     POOL_T* pp = stab_pp[i].mem;
 
-    if (pp->idx) {
+    if (pp->p_idx) {
       __cgen_transpile_sym_entry(pp, 0, true);
     }
   }

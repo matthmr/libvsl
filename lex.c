@@ -89,7 +89,8 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
     lex.master.ev     &= ~__LISP_EV_PAREN_IN;
 
     if (STACK_QUOT(sev)) {
-      // lisp_sexp_node_add(&SEXP_POOLP);
+      stack->typ.lex.expr = true;
+      lisp_sexp_node_add(&SEXP_POOLP);
       defer_for_as(evret.slave, 0);
     }
     else {
@@ -128,7 +129,7 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
     lex.master.cb_idx  = cb_idx;
     lex.master.ev     &= ~__LISP_EV_SYMBOL_OUT;
 
-    stack->typ.lex.hash = lex.master.hash;
+    stack->typ.lex.mem.hash = lex.master.hash;
     hash_done(&lex.master.hash);
 
     if (STACK_QUOT(sev)) {
@@ -141,7 +142,7 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
       // bigger paren level than the function of the current literal: save in a
       // temporary memory on the SEXP tree
       else {
-        // TODO: what?
+        lisp_sexp_sym(&SEXP_POOLP, stack->typ.lex.mem.hash);
         defer_for_as(evret.slave, __LEX_INPUT);
       }
     }
@@ -168,6 +169,7 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
     if (STACK_QUOT(sev)) {
       // same paren level as the function of the current literal: defer
       if ((lex.master.paren+1) == stack->typ.lex.paren) {
+        lisp_sexp_end(&SEXP_POOLP);
         defer_for_as(evret.slave, __LEX_DEFER);
       }
 
@@ -187,7 +189,7 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
 
       // takes precendence over `__STACK_POP'
       stack->ev |= __STACK_PUSH_FUNC;
-      stack->typ.lex.hash = (struct lisp_hash) {0};
+      stack->typ.lex.mem.hash = (struct lisp_hash) {0};
     }
 
     defer_for_as(evret.slave, __LEX_DEFER);
@@ -271,7 +273,7 @@ lex:
   stack->ev     = 0;
   lex.master.ev = 0;
 
-  hash_done(&stack->typ.lex.hash);
+  hash_done(&stack->typ.lex.mem.hash);
   goto lex;
 
   done_for(ret);
@@ -322,6 +324,7 @@ int parse_bytstream(int fd) {
   iofd = fd;
 
   struct lisp_stack stack;
+  stack.typ.lex.expr = false;
 
   lex.master.ev = 0;
   lex.slave     = 0;
