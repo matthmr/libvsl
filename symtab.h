@@ -39,10 +39,10 @@
   ((x).sum % SYMTAB_CELL)
 
 enum lisp_hash_mask {
-  HASH__sum      = BIT(0),
-  HASH__psum     = BIT(1),
-  HASH__len      = BIT(2),
-  HASH__com_part = BIT(3),
+  __LISP_HASH_sum      = BIT(0),
+  __LISP_HASH_psum     = BIT(1),
+  __LISP_HASH_len      = BIT(2),
+  __LISP_HASH_com_part = BIT(3),
 };
 
 struct lisp_hash {
@@ -172,7 +172,7 @@ void hash_done(struct lisp_hash* hash);
 int lisp_symtab_set(struct lisp_sym sym);
 struct lisp_sym_ret lisp_symtab_get(struct lisp_hash hash);
 
-int symtab_init(void);
+void symtab_init(void);
 #endif
 
 #ifndef LOCK_SYMTAB_INTERNALS

@@ -15,7 +15,7 @@
     return hash.x > ppm[lower].hash.x && hash.x < ppm[upper].hash.x;   \
   } \
   static inline bool repeats__##x(struct sort_t* sort) {               \
-    return sort->mask &= HASH__##x;                                    \
+    return sort->mask &= __LISP_HASH_##x;                              \
   } \
   static inline uint yield__##x(struct lisp_sym* ppm, uint i) {        \
     return (uint) ppm[i].hash.x;                                       \
@@ -433,11 +433,7 @@ struct lisp_hash_ret str_hash(const char* str) {
 
   DB_FMT("[ == ] symtab: for string: %s", str);
 
-  for (uint i = 0;; ++i) {
-    if (!(c = str[i])) {
-      break;
-    }
-
+  for (uint i = 0; (c = str[i]); ++i) {
     hash_ret = inc_hash(hash_ret.master, c);
     DB_FMT("[ == ] symtab: character (%c) (%d)", c, hash_ret.master.sum);
 
@@ -524,7 +520,7 @@ struct lisp_sym_ret lisp_symtab_get(struct lisp_hash hash) {
   done_for(ret);
 }
 
-int symtab_init(void) {
+void symtab_init(void) {
   for (uint i = 0; i < SYMTAB_CELL; ++i) {
     symtab_pp[i].mem = symtab_pp[i].base = (symtab + i);
   }
@@ -532,6 +528,4 @@ int symtab_init(void) {
   sort_len.next  = &sort_sum;
   sort_sum.next  = &sort_psum;
   sort_psum.next = &sort_com_part;
-
-  return 0;
 }

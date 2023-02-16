@@ -2,7 +2,10 @@
 #  define LOCK_CGEN
 
 #  define PROVIDE_INC_STRING
+#  define LOCK_ERR_UTILS
+
 #  include "utils.h"
+#  include "err.h"
 
 #  ifndef CGEN_OUTBUF
 #    define CGEN_OUTBUF (4096)

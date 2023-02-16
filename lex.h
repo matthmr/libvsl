@@ -35,12 +35,19 @@ enum lisp_lex_ev {
   __LISP_EV_SYMBOL_IN  = BIT(3),
 };
 
+
 enum lisp_lex_stat {
   __LEX_INPUT    = -3,
   __LEX_POP_LITR = -2,
   __LEX_DEFER    = -1,
   __LEX_OK       = 0,
 };
+
+struct lisp_lex_ev_ret {
+  bool               master;
+  enum lisp_lex_stat slave;
+};
+
 
 struct lisp_lex_m {
   enum lisp_lex_ev ev;     /** @ev:     the lex event                    */
@@ -54,6 +61,8 @@ struct lisp_lex {
   struct lisp_lex_m master;
   int slave;
 };
+
+////////////////////////////////////////////////////////////////////////////////
 
 int parse_bytstream(int fd);
 int lisp_lex_bytstream(struct lisp_stack* stack);

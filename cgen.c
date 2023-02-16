@@ -6,7 +6,6 @@
 
 #include "debug.h"
 #include "cgen.h"
-#include "err.h"
 
 static string_i outbuf = {
   .idx = 0,

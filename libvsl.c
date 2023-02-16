@@ -8,18 +8,12 @@
 #include "libvsl.h"
 
 int main(void) {
-  int ret = 0;
-
   sexp_init();
   symtab_init();
 
-  if (frontend) {
-    ret = frontend();
-    assert(ret == 0, err(EFRONTEND));
+  if (frontend && frontend() != 0) {
+    return err(EFRONTEND);
   }
 
-  ret = parse_bytstream(STDIN_FILENO);
-  assert(ret == 0, OR_ERR());
-
-  done_for(ret);
+  return parse_bytstream(STDIN_FILENO);
 }

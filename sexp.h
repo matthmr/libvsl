@@ -70,7 +70,7 @@ struct lisp_sexp {
   enum sexp_t  t;
 };
 
-int sexp_init(void);
+void sexp_init(void);
 
 #endif
 

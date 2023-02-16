@@ -1,6 +1,10 @@
 #ifndef LOCK_ERR
 #  define LOCK_ERR
 
+#  ifndef LOCK_ERR_UTILS
+#    include "utils.h"
+#  endif
+
 #  define ERR_STRING(mod, msg) \
   STRING("[ !! ] " mod ": " msg)
 

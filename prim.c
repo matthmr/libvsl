@@ -1,7 +1,20 @@
 #define EXTERN_PRIM_FUNC
 
+#include <unistd.h>
+
 #include "debug.h"
 #include "prim.h"  // also includes `symtab.h'
+#include "err.h"   // also includes `utils.h'
+
+enum fecode {
+  FEOK = 0,
+};
+
+#define FECODE_BEGIN (FEOK)
+#define FECODE_END   (FEOK)
+
+static const string_s femsg[] = {
+};
 
 const struct clisp_sym vsl_primtab[] = {
   // () is nil
@@ -53,6 +66,22 @@ const struct clisp_sym vsl_primtab[] = {
   {.str = NULL},
 };
 
+int ferr(enum fecode fecode) {
+  static bool did_msg = false;
+  static enum fecode pfecode = 0;
+
+  if (!did_msg) {
+    did_msg = true;
+    pfecode = fecode;
+
+    if (fecode >= FECODE_BEGIN && fecode <= FECODE_END) {
+      write(STDERR_FILENO, femsg[fecode]._, femsg[fecode].size);
+    }
+  }
+
+  return (int) pfecode;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 CLISP_PRIM() {
@@ -99,9 +128,6 @@ CLISP_PRIM(quot) {
   struct lisp_fun_ret ret = {0};
 
   DB_MSG("-> lisp_prim_quot()");
-
-  ret.master.mem.hash = argp[0].mem.hash;
-  ret.master.typ      = __LISP_VAR_HASH;
 
   return ret;
 }

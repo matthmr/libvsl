@@ -1,10 +1,6 @@
 #include "debug.h"
 #include "stack.h" // also includes `sexp.h'
 
-// TODO: the tree going to become a generic memory pool
-// because the lexer can now send callbacks directly to
-// the stack
-
 #undef LOCK_POOL_DEF
 #undef LOCK_POOL_THREAD
 
@@ -13,6 +9,7 @@
 static struct lisp_sexp* head = NULL;
 struct lisp_sexp* root        = NULL;
 
+// TODO: this is wrong with the new lexer; please refactor
 static inline void pool_clean(POOL_T* pp) {
   for (; pp; pp = pp->next) {
     pp->idx = 0;
@@ -21,9 +18,11 @@ static inline void pool_clean(POOL_T* pp) {
     }
   }
 
-  head = NULL;
+  // head = NULL;
 }
 
+// TODO: this function is probably wrong because 'old' memory doesn't *need* to
+// be in `pr.base'
 static struct pos_t
 lisp_sexp_node_set_pos(enum sexp_t t, POOL_RET_T pr,
                        struct lisp_sexp* head) {
@@ -72,200 +71,9 @@ lisp_sexp_node_get_pos(enum sexp_t t, POOL_RET_T pr,
   return pr;
 }
 
-void lisp_sexp_node_add(POOL_T** mpp) {
-  DB_MSG("-> lisp_sexp_node_add()");
+////////////////////////////////////////////////////////////////////////////////
 
-  if (!head) {
-    DB_MSG("  -> EV: attach to root");
-    root->t     = (__SEXP_SELF_ROOT | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
-    head        = root;
-    (*mpp)->idx = 1;
-    return;
-  }
-
-  POOL_RET_T pr              = pool_add_node(*mpp);
-  struct lisp_sexp* new_head = pr.entry;
-
-  if (pr.base != pr.mem) {
-    *mpp = pr.mem;
-  }
-
-  if (head->t & __SEXP_LEFT_EMPTY) {
-    /**
-          ? <- HEAD
-         /
-        . [new_head]
-     */
-    new_head->root  = lisp_sexp_node_set_pos(ROOT, pr, head);
-    new_head->t     = (__SEXP_SELF_SEXP | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
-    head->left.pos  = lisp_sexp_node_set_pos(CHILD, pr, new_head);
-    head->t        &= ~__SEXP_LEFT_EMPTY;
-    head->t        |= __SEXP_LEFT_SEXP;
-    head            = new_head;
-  }
-  else if (head->t & __SEXP_RIGHT_EMPTY) {
-    /**
-          . <- HEAD
-         / \
-        ?   . [new_head]
-     */
-    new_head->root   = lisp_sexp_node_set_pos(ROOT, pr, head);
-    new_head->t      =
-      (__SEXP_SELF_SEXP | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
-    head->right.pos  = lisp_sexp_node_set_pos(CHILD, pr, new_head);
-    head->t         &= ~__SEXP_RIGHT_EMPTY;
-    head->t         |= __SEXP_RIGHT_SEXP;
-    head             = new_head;
-  }
-  else {
-    /**
-       ? <- HEAD [old_head]           ?
-      / \                    ===>    / \
-     ?   ?                          ?   ,   <- HEAD [lexp_head] `
-                                       / \                      `
-                        old memory -> ?   .         [new_head]  `- new memory
-     */
-    DB_MSG("  -> EV: node lexp");
-
-    /** save the old state of `head', swap the memory for `new_head' to `lexp_head'
-     */
-    struct lisp_sexp  old_head  = *head;
-    struct lisp_sexp* lexp_head = new_head;
-
-    /** set type and offset of `lexp_head'
-     */
-    lexp_head->root = lisp_sexp_node_set_pos(ROOT, pr, head);
-    lexp_head->t    = (SWAP_RL(old_head.t) | __SEXP_RIGHT_SEXP | __SEXP_SELF_LEXP);
-
-    /** change the right type of head from whatever it was to `lexp'
-     */
-    head->t = ((head->t & ~RIGHT) | __SEXP_RIGHT_LEXP);
-    head->right.pos  = lisp_sexp_node_set_pos(CHILD, pr, lexp_head);
-
-    /** get new memory for `new_head'
-          - possible chance of changing the thread of `mpp'
-     */
-    POOL_RET_T ppr
-              = pr;
-    pr        = pool_add_node(*mpp);
-    new_head  = pr.entry;
-
-    if (pr.base != pr.mem) {
-      *mpp    = pr.mem;
-    }
-
-    /** set type and offset of `new_head'
-     */
-    new_head->root       = lisp_sexp_node_set_pos(ROOT, pr, lexp_head);
-    new_head->t          = (__SEXP_SELF_SEXP | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
-    lexp_head->right.pos = lisp_sexp_node_set_pos(CHILD, pr, new_head);
-
-    if (old_head.t & __SEXP_RIGHT_SYM) {
-      /** copy the old right symbol of `head' to `lexp_head'
-       */
-      lexp_head->left.sym   = old_head.right.sym;
-    }
-    else if (old_head.t & RIGHT_CHILD) {
-      /** fix the root offset of the old right child of `head'
-       */
-      ppr = lisp_sexp_node_get_pos(RIGHT_CHILD, ppr, &old_head);
-
-      struct lisp_sexp* rch = ppr.entry;
-      lexp_head->left.pos   = lisp_sexp_node_set_pos(CHILD, ppr, rch);
-      rch->root             = lisp_sexp_node_set_pos(ROOT, ppr, lexp_head);
-    }
-
-    /** swap head for `lexp_head'
-     */
-    head = new_head;
-  }
-}
-
-void lisp_sexp_sym(POOL_T** mpp, struct lisp_hash hash) {
-  /** for now, top-level symbols are silently ignored
-   */
-  if (!head) {
-    return;
-  }
-
-  DB_MSG("-> lisp_sexp_sym()");
-
-  if (head->t & __SEXP_LEFT_EMPTY) {
-    /**
-          ? <- HEAD
-         /
-        *
-     */
-    head->t         &= ~__SEXP_LEFT_EMPTY;
-    head->t         |= __SEXP_LEFT_SYM;
-    head->left.sym   = hash;
-  }
-  else if (head->t & __SEXP_RIGHT_EMPTY) {
-    /**
-          ? <- HEAD
-         / \
-        ?   *
-     */
-    head->t         &= ~__SEXP_RIGHT_EMPTY;
-    head->t         |= __SEXP_RIGHT_SYM;
-    head->right.sym  = hash;
-  }
-  else {
-    /**
-       ?  <- HEAD             ?
-      / \            ===>    / \
-     ?   ?                  ?   , <- HEAD [lexp_head]
-                               / \
-                              ?   *
-     */
-    DB_MSG("  -> EV: sym lexp");
-
-    /** save the old state of `head', get new memory for `lexp_head'
-          - possible chance of changing the thread of `mpp'
-     */
-    struct lisp_sexp old_head   = *head;
-    POOL_RET_T pr               = pool_add_node(*mpp);
-    struct lisp_sexp* lexp_head = pr.entry;
-
-    if (pr.base != pr.mem) {
-      *mpp = pr.mem;
-    }
-
-    /** set type and offset of `lexp_head'
-     */
-    lexp_head->t    =
-      (SWAP_RL(old_head.t) | __SEXP_RIGHT_SYM | __SEXP_SELF_LEXP);
-    lexp_head->root = lisp_sexp_node_set_pos(ROOT, pr, head);
-    lexp_head->right.sym = hash;
-
-    /** change the right type of head from whatever it was to `lexp'
-     */
-    head->t = ((head->t & ~RIGHT) | __SEXP_RIGHT_LEXP);
-    head->right.pos = lisp_sexp_node_set_pos(CHILD, pr, lexp_head);
-
-    if (old_head.t & __SEXP_RIGHT_SYM) {
-      /** copy the old right symbol of `head' to `lexp_head'
-       */
-      lexp_head->left.sym   = old_head.right.sym;
-    }
-    else if (old_head.t & (__SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)) {
-      /** fix the root offset of the old right child of `head'
-       */
-      pr = lisp_sexp_node_get_pos(RIGHT_CHILD, pr, &old_head);
-
-      struct lisp_sexp* rch = pr.entry;
-      lexp_head->left.pos   = lisp_sexp_node_set_pos(CHILD, pr, rch);
-      rch->root             = lisp_sexp_node_set_pos(ROOT, pr, lexp_head);
-    }
-
-    /** swap head for `lexp_head'
-     */
-    head = lexp_head;
-  }
-}
-
-static void
-lisp_sexp_trans(struct lisp_stack* stack) {
+static void lisp_sexp_trans(struct lisp_stack* stack) {
   /**
      algorithm
      ---------
@@ -417,15 +225,203 @@ stage3b_popped:
   }
 }
 
-void lisp_sexp_end(POOL_T* mpp) {
-  DB_MSG("<- lisp_sexp_end()");
+////////////////////////////////////////////////////////////////////////////////
 
-  POOL_RET_T pp = {0};
+void lisp_sexp_node_add(POOL_T** mpp) {
+  DB_MSG("[ == ] sexp: lisp_sexp_node_add()");
+
+  if (!head) {
+    head        = root;
+    (*mpp)->idx = 1;
+    return;
+  }
+
+  POOL_RET_T pr              = pool_add_node(*mpp);
+  struct lisp_sexp* new_head = pr.entry;
+
+  if (pr.base != pr.mem) {
+    *mpp = pr.mem;
+  }
+
+  if (head->t & __SEXP_LEFT_EMPTY) {
+    /**
+          ? <- HEAD
+         /
+        . [new_head]
+     */
+    new_head->root  = lisp_sexp_node_set_pos(ROOT, pr, head);
+    new_head->t     = (__SEXP_SELF_SEXP | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
+    head->left.pos  = lisp_sexp_node_set_pos(CHILD, pr, new_head);
+    head->t        &= ~__SEXP_LEFT_EMPTY;
+    head->t        |= __SEXP_LEFT_SEXP;
+    head            = new_head;
+  }
+  else if (head->t & __SEXP_RIGHT_EMPTY) {
+    /**
+          . <- HEAD
+         / \
+        ?   . [new_head]
+     */
+    new_head->root   = lisp_sexp_node_set_pos(ROOT, pr, head);
+    new_head->t      =
+      (__SEXP_SELF_SEXP | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
+    head->right.pos  = lisp_sexp_node_set_pos(CHILD, pr, new_head);
+    head->t         &= ~__SEXP_RIGHT_EMPTY;
+    head->t         |= __SEXP_RIGHT_SEXP;
+    head             = new_head;
+  }
+  else {
+    /**
+       ? <- HEAD [old_head]           ?
+      / \                    ===>    / \
+     ?   ?                          ?   ,   <- HEAD [lexp_head] `
+                                       / \                      `
+                        old memory -> ?   .         [new_head]  `- new memory
+     */
+    DB_MSG("[ == ] sexp(lisp_sexp_node_add): lexp");
+
+    /** save the old state of `head', swap the memory for `new_head' to
+        `lexp_head'
+     */
+    struct lisp_sexp  old_head  = *head;
+    struct lisp_sexp* lexp_head = new_head;
+
+    /** set type and offset of `lexp_head'
+     */
+    lexp_head->root = lisp_sexp_node_set_pos(ROOT, pr, head);
+    lexp_head->t    = (SWAP_RL(old_head.t) | __SEXP_RIGHT_SEXP | __SEXP_SELF_LEXP);
+
+    /** change the right type of head from whatever it was to `lexp'
+     */
+    head->t = ((head->t & ~RIGHT) | __SEXP_RIGHT_LEXP);
+    head->right.pos  = lisp_sexp_node_set_pos(CHILD, pr, lexp_head);
+
+    /** get new memory for `new_head'
+          - possible chance of changing the thread of `mpp'
+     */
+    POOL_RET_T ppr
+              = pr;
+    pr        = pool_add_node(*mpp);
+    new_head  = pr.entry;
+
+    if (pr.base != pr.mem) {
+      *mpp    = pr.mem;
+    }
+
+    /** set type and offset of `new_head'
+     */
+    new_head->root       = lisp_sexp_node_set_pos(ROOT, pr, lexp_head);
+    new_head->t          = (__SEXP_SELF_SEXP | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
+    lexp_head->right.pos = lisp_sexp_node_set_pos(CHILD, pr, new_head);
+
+    if (old_head.t & __SEXP_RIGHT_SYM) {
+      /** copy the old right symbol of `head' to `lexp_head'
+       */
+      lexp_head->left.sym   = old_head.right.sym;
+    }
+    else if (old_head.t & RIGHT_CHILD) {
+      /** fix the root offset of the old right child of `head'
+       */
+      ppr = lisp_sexp_node_get_pos(RIGHT_CHILD, ppr, &old_head);
+
+      struct lisp_sexp* rch = ppr.entry;
+      lexp_head->left.pos   = lisp_sexp_node_set_pos(CHILD, ppr, rch);
+      rch->root             = lisp_sexp_node_set_pos(ROOT, ppr, lexp_head);
+    }
+
+    head = new_head;
+  }
+}
+
+void lisp_sexp_sym(POOL_T** mpp, struct lisp_hash hash) {
+  /** for now, top-level symbols are silently ignored
+   */
+  if (!head) {
+    return;
+  }
+
+  DB_MSG("[ == ] sexp: lisp_sexp_sym()");
+
+  if (head->t & __SEXP_LEFT_EMPTY) {
+    /**
+          ? <- HEAD
+         /
+        *
+     */
+    head->t         &= ~__SEXP_LEFT_EMPTY;
+    head->t         |= __SEXP_LEFT_SYM;
+    head->left.sym   = hash;
+  }
+  else if (head->t & __SEXP_RIGHT_EMPTY) {
+    /**
+          ? <- HEAD
+         / \
+        ?   *
+     */
+    head->t         &= ~__SEXP_RIGHT_EMPTY;
+    head->t         |= __SEXP_RIGHT_SYM;
+    head->right.sym  = hash;
+  }
+  else {
+    /**
+       ?  <- HEAD             ?
+      / \            ===>    / \
+     ?   ?                  ?   , <- HEAD [lexp_head]
+                               / \
+                              ?   *
+     */
+    DB_MSG("[ == ] sexp(lisp_sexp_sym): lexp");
+
+    /** save the old state of `head', get new memory for `lexp_head'
+          - possible chance of changing the thread of `mpp'
+     */
+    struct lisp_sexp old_head   = *head;
+    POOL_RET_T pr               = pool_add_node(*mpp);
+    struct lisp_sexp* lexp_head = pr.entry;
+
+    if (pr.base != pr.mem) {
+      *mpp = pr.mem;
+    }
+
+    /** set type and offset of `lexp_head'
+     */
+    lexp_head->t    =
+      (SWAP_RL(old_head.t) | __SEXP_RIGHT_SYM | __SEXP_SELF_LEXP);
+    lexp_head->root = lisp_sexp_node_set_pos(ROOT, pr, head);
+    lexp_head->right.sym = hash;
+
+    /** change the right type of head from whatever it was to `lexp'
+     */
+    head->t = ((head->t & ~RIGHT) | __SEXP_RIGHT_LEXP);
+    head->right.pos = lisp_sexp_node_set_pos(CHILD, pr, lexp_head);
+
+    if (old_head.t & __SEXP_RIGHT_SYM) {
+      /** copy the old right symbol of `head' to `lexp_head'
+       */
+      lexp_head->left.sym   = old_head.right.sym;
+    }
+    else if (old_head.t & (__SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)) {
+      /** fix the root offset of the old right child of `head'
+       */
+      pr = lisp_sexp_node_get_pos(RIGHT_CHILD, pr, &old_head);
+
+      struct lisp_sexp* rch = pr.entry;
+      lexp_head->left.pos   = lisp_sexp_node_set_pos(CHILD, pr, rch);
+      rch->root             = lisp_sexp_node_set_pos(ROOT, pr, lexp_head);
+    }
+
+    head = lexp_head;
+  }
+}
+
+void lisp_sexp_end(POOL_T* mpp) {
+  DB_MSG("[ == ] sexp: lisp_sexp_end()");
+
+  POOL_RET_T pr = {0};
   struct lisp_sexp* phead = head;
 
-  pp.mem   =
-  pp.base  = mpp;
-  pp.entry = phead;
+  pr.mem   = pr.base = mpp;
+  pr.entry = phead;
 
   bool lexp_head = ((phead->t & __SEXP_SELF_LEXP) && true);
 
@@ -435,8 +431,8 @@ again:
   }
 
   for (;;) {
-    pp    = lisp_sexp_node_get_pos(ROOT, pp, phead);
-    phead = pp.entry;
+    pr    = lisp_sexp_node_get_pos(ROOT, pr, phead);
+    phead = pr.entry;
 
     if (phead->t & (__SEXP_SELF_SEXP | __SEXP_SELF_ROOT)) {
       break;
@@ -467,9 +463,7 @@ int lisp_sexp_eval(POOL_T* mpp) {
   done_for_with(ret, pool_clean(mpp));
 }
 
-int sexp_init(void) {
+void sexp_init(void) {
   root    = POOLP->mem;
   root->t = (__SEXP_SELF_ROOT | __SEXP_LEFT_EMPTY | __SEXP_RIGHT_EMPTY);
-
-  return 0;
 };

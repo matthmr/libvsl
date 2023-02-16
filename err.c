@@ -3,7 +3,6 @@
 // TODO: make this more verbose
 // TODO: make this optional
 
-#include "utils.h"
 #include "err.h"
 
 static const string_s emsg[] = {

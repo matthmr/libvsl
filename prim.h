@@ -27,8 +27,9 @@
 extern const struct clisp_sym vsl_primtab[];
 
 enum lisp_fun_ret_t {
-  __LISP_FUN_MASK = -1, /** stack the call to the function, waiting for more
-                            arguments */
+  __LISP_FUN_MASK = -2,  /** stack the call to the function, waiting for more
+                             arguments */
+  __LISP_FUN_ERR  = -1u, /**  generic error */
   __LISP_FUN_OK   = 0,
 };
 
@@ -44,11 +45,6 @@ struct lisp_fun_arg {
   enum lisp_sym_typ typ;
 };
 
-// struct lisp_fun_args {
-//   struct lisp_fun_argp* argp;
-//   uint                  argv;
-// };
-
 // f(x) = y -> master := y, slave := err
 struct lisp_fun_ret {
   struct lisp_fun_arg master;
@@ -56,11 +52,10 @@ struct lisp_fun_ret {
 };
 
 typedef struct lisp_fun_ret
-(*lisp_fun) (struct lisp_fun_arg* argp, uint argv, struct lisp_sym* sym);
+(*lisp_fun) (struct lisp_fun_arg* argp, uint argv);
 
 #  define CLISP_PRIM(name) \
-  struct lisp_fun_ret lisp_prim_##name(struct lisp_fun_arg* argp, \
-                                       uint argv, struct lisp_sym* sym)
+  struct lisp_fun_ret lisp_prim_##name(struct lisp_fun_arg* argp, uint argv)
 
 #  ifdef EXTERN_PRIM_FUNC
 CLISP_PRIM();
