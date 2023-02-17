@@ -83,50 +83,12 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
 
   enum lisp_stack_ev sev = stack->ev;
 
-  // ...( -> push
-  if (lev & __LISP_EV_PAREN_IN) {
-    lex.master.cb_idx  = IDX_MH(cb_idx);
-    lex.master.ev     &= ~__LISP_EV_PAREN_IN;
-
-    if (STACK_QUOT(sev)) {
-      stack->typ.lex.expr = true;
-      lisp_sexp_node_add(&SEXP_POOLP);
-      defer_for_as(evret.slave, 0);
-    }
-    else {
-      stack->typ.lex.paren = (lex.master.paren+1);
-    }
-
-    if (prime) {
-      /** the core VSL interpreter doesn't allow function names to be the
-          return value of a hash-changing function, e.g:
-
-          (add-prefix sym) -> sym-prefix
-          ((add-prefix function) arg) -> (function-prefix arg) -> ...
-
-          the code above is not allowed because the stack schema is unable
-          to communicate with its parents
-      */
-      defer_for_as(evret.slave, err(ENOHASHCHANGING));
-    }
-    else {
-      DB_MSG("[ == ] lex(ev): prime for stack");
-      evret.master  = true;
-      defer_for_as(evret.slave, 0);
-    }
-  }
-
   // primed:     ...a -> push_func
   // not primed: ...a -> push_var
-  else if (lev & __LISP_EV_SYMBOL_OUT) {
-    /** we prioritize `SYMBOL_OUT` over `PARENT_OUT`, but the latter can also
-        trigger the former. If that happens, we *don't* send anything to back
-        the frame *or* to the base, we just clear the `symbol_out' state and set
-        the callback index to `cb_idx', which would be `)'. When the frame calls
-        us back, we immediately pop.
-    */
+  if (lev & __LISP_EV_SYMBOL_OUT) {
+    // we prioritize `SYMBOL_OUT' over `PAREN_OUT'
 
-    lex.master.cb_idx  = cb_idx;
+    lex.master.cb_idx  = cb_idx + ((lev & __LISP_EV_PAREN_IN)? 1: 0);
     lex.master.ev     &= ~__LISP_EV_SYMBOL_OUT;
 
     stack->typ.lex.mem.hash = lex.master.hash;
@@ -156,6 +118,48 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
     }
 
     defer_for_as(evret.slave, __LEX_DEFER);
+  }
+
+  // ...( -> push
+  else if (lev & __LISP_EV_PAREN_IN) {
+    // we prioritize `SYMBOL_OUT' over `PAREN_IN'
+
+    lex.master.cb_idx = IDX_MH(cb_idx);
+    lex.master.ev &= ~__LISP_EV_PAREN_IN;
+
+    // if (lev & __LISP_EV_SYMBOL_OUT) {
+    //   lex.master.ev &= ~__LISP_EV_SYMBOL_OUT;
+    //   stack->ev     |= __STACK_PUSH_VAR;
+    //   hash_done(&lex.master.hash);
+    //   defer_for_as(evret.slave, __LEX_DEFER);
+    // }
+
+    if (STACK_QUOT(sev)) {
+      stack->typ.lex.expr = true;
+      lisp_sexp_node_add(&SEXP_POOLP);
+      defer_for_as(evret.slave, 0);
+    }
+    else {
+      stack->typ.lex.paren = (lex.master.paren+1);
+    }
+
+    if (prime) {
+      /** the core VSL interpreter doesn't allow function names to be the
+          return value of a hash-changing function, e.g:
+
+          (add-prefix sym) -> sym-prefix
+          ((add-prefix function) arg) -> (function-prefix arg) -> ...
+
+          the code above is not allowed because the stack schema is unable
+          to communicate with its parents
+      */
+      defer_for_as(evret.slave, err(ENOHASHCHANGING));
+    }
+    else {
+      DB_MSG("[ == ] lex(ev): prime for stack");
+      evret.master  = true;
+      defer_for_as(evret.slave, 0);
+    }
   }
 
   // ...) -> pop
@@ -253,17 +257,19 @@ lex:
             by the stack frame
    */
 
-  // push function
-  if (STACK_PUSHED_FUNC(stack->ev)) {
-    stack->ev &= ~__STACK_PUSHED_FUNC;
-    lex.slave = lisp_stack_lex_frame(stack).slave;
-  }
-
   // push variable (top level)
-  else if (STACK_PUSHED_VAR(stack->ev)) {
+  if (STACK_PUSHED_VAR(stack->ev)) {
     stack->ev &= ~__STACK_PUSHED_VAR;
 
-    DB_MSG("TODO: implement top level symbol resolution");
+    DB_MSG("TODO: implement top-level symbol resolution");
+
+    goto lex;
+  }
+
+  // push function
+  else if (STACK_PUSHED_FUNC(stack->ev)) {
+    stack->ev &= ~__STACK_PUSHED_FUNC;
+    lex.slave = lisp_stack_lex_frame(stack).slave;
   }
 
   // give the parent error precedence over `EIMBALANCED'
@@ -272,8 +278,6 @@ lex:
 
   stack->ev     = 0;
   lex.master.ev = 0;
-
-  hash_done(&stack->typ.lex.mem.hash);
   goto lex;
 
   done_for(ret);
