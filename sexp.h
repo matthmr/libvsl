@@ -22,22 +22,37 @@ enum sexp_t {
 
   __SEXP_LEFT_SYM    = BIT(7),
   __SEXP_RIGHT_SYM   = BIT(8),
-
-  __SEXP_SELF_EMPTY  = BIT(9),
-  __SEXP_LEFT_EMPTY  = BIT(10),
-  __SEXP_RIGHT_EMPTY = BIT(11),
 };
 
-#  define CHILD       (-0)
-#  define ROOT        (-1)
+// used for `get_pos'
+#  define __RIGHT_CHILD \
+  (__SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)
 
-#  define RIGHT_CHILD (__SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)
-#  define LEFT_CHILD  (__SEXP_LEFT_SEXP  | __SEXP_LEFT_LEXP)
+#  define __LEFT_CHILD  \
+  (__SEXP_LEFT_SEXP  | __SEXP_LEFT_LEXP)
+
+#  define __ROOT        \
+  (__SEXP_SELF_ROOT)
+
+#  define __CHILD \
+  (__RIGHT_CHILD | __LEFT_CHILD)
+
+#  define RIGHT_CHILD(x) ((x) & (__SEXP_RIGHT_SYM | __RIGHT_CHILD))
+#  define LEFT_CHILD(x)  ((x) & (__SEXP_LEFT_SYM  | __LEFT_CHILD))
+#  define IS_ROOT(x)     ((x) & __ROOT)
+#  define IS_LEXP(x)     ((x) & __SEXP_SELF_LEXP)
+
+#  define RIGHT_CHILD_EXPR(x) \
+  ((x) & (__RIGHT_CHILD))
+
+#  define LEFT_CHILD_EXPR(x) \
+  ((x) & (__LEFT_CHILD))
 
 struct pos_t {
-  uint am;
-  int  pidx; /** index of the pool section;
-                 mirroed by `pool.h:MEMPOOL::idx' */
+  uint pidx; /** @pidx: offset for the appropriate type; relative to the base
+                        of a pool section                   */
+  int  cidx; /** @cidx: index of the pool section;
+                        mirrored by `pool.h:MEMPOOL::c_idx' */
 };
 
 // TODO: add `struct lisp_sym` as a type
@@ -70,7 +85,7 @@ struct lisp_sexp {
   enum sexp_t  t;
 };
 
-int sexp_init(void);
+void sexp_init(void);
 
 #endif
 

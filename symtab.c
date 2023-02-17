@@ -15,7 +15,7 @@
     return hash.x > ppm[lower].hash.x && hash.x < ppm[upper].hash.x;   \
   } \
   static inline bool repeats__##x(struct sort_t* sort) {               \
-    return sort->mask &= HASH__##x;                                    \
+    return sort->mask &= __LISP_HASH_##x;                              \
   } \
   static inline uint yield__##x(struct lisp_sym* ppm, uint i) {        \
     return (uint) ppm[i].hash.x;                                       \
@@ -244,12 +244,12 @@ static int lisp_symtab_sort_base(POOL_T* pp, uint idx, struct lisp_hash hash,
   do {
     cpp = pp;
     mem = pp->mem;
-    idx = pp->idx;
+    idx = pp->p_idx;
 
     // inclusively in between its base and its neighbour: find the smallest, put
     // ourselves one entry after it
     if (sort->in_between(mem, hash, 0, IDX_HM(idx))) {
-      sstat = lisp_symtab_sort_lsmall(pp->idx, mem, hash, sort);
+      sstat = lisp_symtab_sort_lsmall(pp->p_idx, mem, hash, sort);
 
       switch (sstat.slave) {
       case __SORT_NEXT:
@@ -271,7 +271,7 @@ static int lisp_symtab_sort_base(POOL_T* pp, uint idx, struct lisp_hash hash,
   pp  = cpp;
   mem = pp->mem;
 
-  sstat = lisp_symtab_sort_lsmall(pp->idx, mem, hash, sort);
+  sstat = lisp_symtab_sort_lsmall(pp->p_idx, mem, hash, sort);
 
   switch (sstat.slave) {
   case __SORT_NEXT:
@@ -332,7 +332,7 @@ lisp_symtab_get_sorted(POOL_T* pp, struct lisp_hash hash,
   do {
     cpp = pp;
     mem = pp->mem;
-    idx = pp->idx;
+    idx = pp->p_idx;
 
     // in between the current chunk
     if (sort->in_between(mem, hash, 0, IDX_HM(idx))) {
@@ -350,7 +350,7 @@ lisp_symtab_get_sorted(POOL_T* pp, struct lisp_hash hash,
     }
 
     // `mem[pp->idx - 1].x < hash.x' means we're way out of range
-    if (sort->lt(sort->yield(mem, IDX_HM(pp->idx)), hash)) {
+    if (sort->lt(sort->yield(mem, IDX_HM(pp->p_idx)), hash)) {
       defer_for_as(ret.slave, 1);
     }
 
@@ -433,11 +433,7 @@ struct lisp_hash_ret str_hash(const char* str) {
 
   DB_FMT("[ == ] symtab: for string: %s", str);
 
-  for (uint i = 0;; ++i) {
-    if (!(c = str[i])) {
-      break;
-    }
-
+  for (uint i = 0; (c = str[i]); ++i) {
     hash_ret = inc_hash(hash_ret.master, c);
     DB_FMT("[ == ] symtab: character (%c) (%d)", c, hash_ret.master.sum);
 
@@ -455,7 +451,7 @@ static struct lisp_sym_ret lisp_symtab_get_for_set(struct lisp_hash hash) {
   POOL_T* base_pp = symtab_pp[idx].base;
 
   // no symbols yet: good to go!
-  if (!base_pp->idx) {
+  if (!base_pp->p_idx) {
     defer();
   }
 
@@ -491,11 +487,11 @@ int lisp_symtab_set(struct lisp_sym sym) {
   POOL_RET_T pr  = pool_add_node(mpp);
   assert(pr.stat == 0, OR_ERR());
 
-  if (pr.base != pr.mem) {
-    mpp = symtab_pp[idx].mem = pr.mem;
+  if (pr.new != pr.base) {
+    mpp = symtab_pp[idx].mem = pr.new;
   }
 
-  pp_idx = mpp->idx;
+  pp_idx = mpp->p_idx;
 
   mpp->mem[IDX_HM(pp_idx)] = sym;
 
@@ -511,7 +507,7 @@ struct lisp_sym_ret lisp_symtab_get(struct lisp_hash hash) {
 
   POOL_T* base_pp = symtab_pp[idx].base;
 
-  if (!base_pp->idx) {
+  if (!base_pp->p_idx) {
     defer_for_as(ret.slave, err(ENOTFOUND));
   }
 
@@ -524,7 +520,7 @@ struct lisp_sym_ret lisp_symtab_get(struct lisp_hash hash) {
   done_for(ret);
 }
 
-int symtab_init(void) {
+void symtab_init(void) {
   for (uint i = 0; i < SYMTAB_CELL; ++i) {
     symtab_pp[i].mem = symtab_pp[i].base = (symtab + i);
   }
@@ -532,6 +528,4 @@ int symtab_init(void) {
   sort_len.next  = &sort_sum;
   sort_sum.next  = &sort_psum;
   sort_psum.next = &sort_com_part;
-
-  return 0;
 }

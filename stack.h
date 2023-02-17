@@ -22,7 +22,6 @@ enum lisp_stack_ev {
 
   __STACK_LIT        = BIT(5), /** for both */
   __STACK_SYM        = BIT(6), /** for LEX */
-  __STACK_EMPTY      = BIT(7), /** for LEX  */
 };
 
 #  define __STACK_QUOT (__STACK_LIT)
@@ -48,8 +47,11 @@ enum lisp_stack_ev {
 ////////////////////////////////////////////////////////////////////////////////
 
 struct lisp_lex_stack {
-  struct lisp_hash hash;  /** @hash:  the current hash      */
-  uint             paren; /** @paren: the paren level       */
+  bool             expr;  /** @expr:  boolean switch for SEXPs:
+                              -> false: hash
+                              -> true:  sexp              */
+  union lisp_fun_u mem;   /** @mem:   the stack memory    */
+  uint             paren; /** @paren: the paren level; +1 */
 };
 
 struct lisp_sexp_stack {
