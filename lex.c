@@ -3,12 +3,6 @@
 #include "debug.h"
 #include "lex.h"   // also includes `symtab.h'
 
-#undef LOCK_POOL_THREAD
-
-#include "pool.h"  // also includes `err.h'
-
-#define SEXP_POOLP POOLP
-
 // TODO: try to make these global variables stack-local (somehow)
 
 static struct lisp_lex lex  = {0};
@@ -104,7 +98,7 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
       // bigger paren level than the function of the current literal: save in a
       // temporary memory on the SEXP tree
       else {
-        lisp_sexp_sym(&SEXP_POOLP, stack->typ.lex.mem.hash);
+        lisp_sexp_sym(sexp_pp, stack->typ.lex.mem.hash);
         defer_for_as(evret.slave, __LEX_INPUT);
       }
     }
@@ -136,7 +130,7 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
 
     if (STACK_QUOT(sev)) {
       stack->typ.lex.expr = true;
-      lisp_sexp_node_add(&SEXP_POOLP);
+      lisp_sexp_node_add(sexp_pp);
       defer_for_as(evret.slave, 0);
     }
     else {
@@ -173,7 +167,7 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
     if (STACK_QUOT(sev)) {
       // same paren level as the function of the current literal: defer
       if ((lex.master.paren+1) == stack->typ.lex.paren) {
-        lisp_sexp_end(&SEXP_POOLP);
+        lisp_sexp_end(sexp_pp);
         defer_for_as(evret.slave, __LEX_DEFER);
       }
 
