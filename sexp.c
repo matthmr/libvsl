@@ -410,7 +410,7 @@ void lisp_sexp_end(POOL_T** mpp) {
   bool lexp_head = IS_LEXP(phead->t) && true;
 
 again:
-  if (phead == root) {
+  if (!phead || phead == root) {
     return;
   }
 

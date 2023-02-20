@@ -37,10 +37,10 @@ enum lisp_lex_ev {
 
 
 enum lisp_lex_stat {
-  __LEX_INPUT    = -3,
-  __LEX_POP_LITR = -2,
-  __LEX_DEFER    = -1,
-  __LEX_OK       = 0,
+  __LEX_SEXP_HANDLED = -3,
+  __LEX_NO_INPUT     = -2,
+  __LEX_DEFER        = -1,
+  __LEX_OK           =  0,
 };
 
 struct lisp_lex_ev_ret {

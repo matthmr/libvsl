@@ -16,6 +16,7 @@
 
 enum ecode {
   EOK = 0,
+
   EIMBALANCED,
   EREAD,
   EFRONTEND,
@@ -28,10 +29,12 @@ enum ecode {
   ENOTFOUND,
   EHASHERR,
   ENOTALLOWED,
+
+  EOK_END,
 };
 
 #  define ECODE_BEGIN (EOK)
-#  define ECODE_END   (ENOTALLOWED)
+#  define ECODE_END   (EOK_END)
 #  define ERROR       (-1u)
 
 #  if ECODE_LEN == ERROR
