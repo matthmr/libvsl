@@ -15,129 +15,297 @@ PREVSL implements the following primitives:
 
 ### Generic
 
+<!-- TODO: does `set' copy of reference memory? -->
+
 Those symbols are identical for all implementation of LIBVSL.
 
 - function: `set`
-  - form: `set ::= <SYM*> <SEXP> -> <SYM*>`
-  - sets `<SYM>` to the value of `<SEXP>`
+  - form: `(set <NAME> <EXPR>)`
+  - sets `<NAME>` to the value of `<EXPR>`. `<NAME>` is a literal symbol.
+  - example:
+    ```lisp
+    (set true t)
+    (set false nil)
+    (set booleans (quot (true false)))
+    ```
+- function: `del`
+  - form: `(del <NAME>)`
+  - unbounds `<NAME>`. Unbounding means the symbol that had the hash of `<NAME>`
+  is taken off the symbol table. `<NAME>` is a symbol.
+  - example:
+    ```lisp
+    (set x nil)
+    (del x)
 
-- function: `func`
-  - form: `func ::= <SYM*> <SYM-LIST> <EXP-LIST> -> <SYM*>`
-    + where:
-      + `SYM-LIST ::= <SYM> <SYM-LIST> | <EMPTY-LIST>`
-      + `EXP-LIST ::=  <EXP> <EXP-LIST> | nil`
-  - sets `<SYM>` to be the head of the tree of `<EXP-LIST>`, substituting the
-    symbols in `<EXP-LIST>` by the values positionally matched by the symbols in
-    `<SYM-LIST>`
+    (fun something ())
+    (del something)
+    ```
+
+- function: `fun`
+  - form: `(fun <NAME> (<ARGS>) <BODY>...)`
+  - sets `<NAME>` to be the head of the tree of `<BODY>`, substituting the
+    symbols by the values positionally matched by the symbols in `<ARGS>`.
+    `<NAME>` is a literal symbol, `<ARGS>` is a list of symbols and `<BODY>` is
+    multiple expressions.
+  - example:
+    ```lisp
+    (fun boolean? (x) (return (if (eq x t) t (eq x nil))))
+    (fun is-empty-sexp-nil? (expr) (return (eq () nil)))
+    (fun type-of-head (e) (return (type (head e))))
+    ```
+
+- function: `lam`
+  - form: `(lam (<ARGS>) <EXPR>)`
+  - returns a lambda function that returns `<EXPR>`. `<ARGS>` is a list of
+    symbols.
+  - example:
+    ```lisp
+    (filter list (lam (e) (is-even e)))
+    (set append-prepend-nil (lam (e) (quot nil e nil)))
+    (set append-prepend-t (lam (e) (quot t e t)))
+    ```
 
 - function: `eval`
-  - form: `eval ::= <SEXP> -> ??`
-  - evals the first argument.
+  - form: `(eval <EXPR>)`
+  - evals `<EXPR>`. If the first element of `<EXPR>` is `()`, then eval will
+    recurse, creating a new tree with elements of the same recusrion level as
+    sibblings in the tree (similar to ``(a ,b)` in *elisp*). `<EXPR>` is quoted.
+  - example:
+    ```lisp
+    (eval (quot nil)) -> nil
+    (eval nil) -> nil
+    (eval (() (quot a) nil)) -> (a nil)
+    ```
 
 - function: `quot`
-  - form: `quot ::= <SEXP> -> <SEXP>`
-  - "quotes" the first argument. Here, a quote just means take the SEXP tree and
-    store it as data, instead of evaluating, e.g.:
+  - form: `(quot <EXPR>)`
+  - "quotes" `<EXPR>`. Here, a quote just means take the SEXP tree and store it
+    as data, instead of evaluating.
+  - example:
     ```lisp
-    (+ 1 2) -> 3
-    (quot (+ 1 2)) -> (+ 1 2)
+    (quot x) -> x
+    (quot (quot x)) -> (quot x)
+    (quot ()) -> ()
     ```
+
+- function: `lexp`
+  - form: `(lexp <TREE>)`
+  - makes `<EXPR>` be an LEXP, in-place.
+  - example:
+    ```lisp
+    (set tree (quot (a b))) -> (a b)
+
+    (fun list-append (tree elem)
+       (set old-tree-right (right-child tree))
+       (lexp old-tree-right)
+       (set-left-child (right-child tree) (left-child old-tree-right))
+       (set-right-child (right-child tree) (quot elem))
+       (return tree))
+
+    (list-append tree c) -> (a b c)
+    (list-append (list-append tree c) d) -> (a b c d)
+    ```
+
 - function: `if`
-  - form: `if ::= <SEXPC> <SEXPT> <SEXPF> -> nil`
-  - evals `<SEXPC>`, if non-nil, then eval `<SEXPT>` then exit, if false, then eval
-    `<SEXPF>` then exit. `<SEXPF>` is optional.
+  - form: `(if <COND> <TRUE-EXPR> <FALSE-EXPR>?)`
+  - evals `<COND>`, if non-nil, then evals `<TRUE-EXPR>` then exit. If nil, then
+    evals `<FALSE-EXPR>` then exit. `<FALSE-EXPR>` is optional. If nil and no
+    `<FALSE-EXPR>` exists, then returns `nil`.
+  - example:
+    ```lisp
+    (if (not (eq nil ())) @sym) -> ni
+    (if (eq nil (head (quot (nil)))) (list nil) nil) -> (nil)
+    (if (quot t) nil t) -> nil
+    ```
 
 - function: `eq`
-  - form `eq ::= <SEXP1> <SEXP2> -> ( t | nil )`
-  - returns `t` if `<SEXP1>` is equal to `<SEXP2>`. As this is a strictly
-    symbolic LISP (i.e. no literals), equality means two SEXPs have the same
-    resulting tree. e.g:
+  - form `(eq <EXPR1> <EXPR2>)`
+  - returns `t` if `<EXPR1>` is "equal" to `<EXPR2>`. Equality here depends on
+    the type of the return value of the expressions. As LIBVSL, the base for
+    PREVSL, is a strictly symbolic LISP, equality either means:
+    1. the symbols are the same; have the same hash; point to the same address
+    2. the SEXP trees are the same; they have the same size and each element of
+       it respects `1.` `eq` will return `nil` if the expressions have different
+       types.
+  - example:
     ```lisp
-    (set thing (quot (a-tree)))
-
-    (eq thing (quot (a-tree))) -> t
-    (eq thing (quot a-tree)) -> nil
+    (eq () nil) -> t
+    (eq (quot ()) nil) -> nil ; different types: (eq SEXP SYM)
+    (eq eq eq) -> t ; same symbol
     ```
 
 - function: `not`
-  - form: `not ::= <SEXP> -> (t | nil)`
-  - negates the sexp, reducing it to a boolean. e.g:
-  ```lisp
-  (not t) -> nil
-  (not (quot (some-tree))) -> nil
-  (not nil) -> t
-  ```
+  - form: `(not <EXPR>)`
+  - negates the boolean value of `<EXPR>`. The boolean value of `<EXPR>` will
+    follow that anything that's not `nil` (or bound to `nil`) is `t`.
+  - example:
+    ```lisp
+    (not (quot nil)) -> nil
+    (not (quot (some-tree))) -> nil
+    (not nil) -> t
+    ```
 
 - function: `block`
-  - form: `block ::= <SEXP> block | nil`
-  - evals as many `<SEXP>`s in it as it can. e.g:
-  ```lisp
-  (if (eq answer-to-everything fourty-two)
-   (block
-    (do-something)
-    (do-something-else)))
-  ```
+  - form: `(block <EXPR>...)`
+  - evals as many `<EXPR>`s in it as it can. This is used to "bypass" the
+    one-expr limit of functions like `if`.
+  - example:
+    ```lisp
+    (if (eq @sexp (type ()))
+     (block
+       (do-something)
+       (do-something-else)))
+    ```
 
 - function: `while`
-  - form: `while ::= <SEXPC> <EXP-LIST> -> nil`
-    + where:
-      + `EXP-LIST ::= <SEXP> <EXP-LIST> | nil`
-  - keeps evaluating from the top of the tree of `<EXP-LIST>` until `<SEXPC>` is
-    false
+  - form: `(while <COND> <EXPR>...)`
+  - evaluates all expressions in `<EXPR>` while `<COND>` is boolean `t`.
+  - example:
+    ```lisp
+    (while t (do-something-forever))
+    (while (not thing) (do-thing-for thing) (do-another-thing-for thing))
+    (while nil (never-execute))
+    ```
 
 - function: `break`
-  - form: `break ::= nil -> nil`
-  - breaks out of the closest `while` scope. e.g:
+  - form: `(break)`
+  - breaks out of the closest `while` scope.
+  - example:
+    ```lisp
+       (while t (break))
+       (while (some-function)
+         (if some-condition
+           (break)))
+       (while t
+         (if (not (head some-list))
+             (break)))
+    ```
 
 - function: `continue`
-  - form: `continue ::= nil -> nil`
-  - put the parsing head back to the first `<EXP>` below the closest `while`
-    scope. e.g:
+  - form: `(continue)`
+  - goes to the next iteration in a `while` block.
+  - example:
+    ```lisp
+    (while t (continue))
+    (while some-condition
+      (if (some-other-condition)
+        (continue)))
+    (while t
+      (if (not (head some-list))
+        (continue)
+        (break)))
+    ```
 
 - function: `return`
-  - form: `return ::= <SEXP> | nil -> nil`
-  - assigns the return value for a function defined with `func`
+  - form: `(return <EXPR>)`
+  - returns `<EXPR>` as the return value of a function.
+  - example:
+    ```lisp
+    (fun foo ()
+      (return (quot bar)))
+    (fun hello ()
+      (return (quot world)))
+    (fun sym-eq (a b)
+      (return (eq
+               (if (eq (type a) @sexp) nil a)
+               (if (eq (type b) @sexp) nil b))))
+    ```
 
 - function: `goto`/`label`
-  - form(s):
-    + goto: `goto ::= <SYM> -> nil`
-      + go to a label
-    + label: `label ::= <SYM> -> nil`
-      + marks an sexp as a label, e.g.:
-      ```lisp
-      (label do-thing)
-      (thing)
-      (goto do-thing)
-
-      ; equivalent to
-      (while t
-        (thing))
-      ```
+  - form:
+    + `(goto <LABEL>)`
+      + goes to `<LABEL>`. If it doesn't exist, then do nothing. `<LABEL>`
+        *must* be declared **before** the `goto` function. Other implementations
+        of LIBVSL, such as bootstrapped ones, may not enforce this. However,
+        'raw' LIBVSL does.
+    + `(label <NAME>)`
+      + sets `<NAME>` as a label.
+  - example
+    ```lisp
+    (while (foo)
+      (do-something-before-bar)
+      (label bar)
+      (do-something)
+      (if (some-condition)
+          (goto bar)
+          (if (some-breaking-condition) (break))))
+    ```
 - function: `cond`
-  - form: `cond ::= <SEXP> cond | nil -> <SEXP>`
-  - evaluates the first element of its SEXPs children, if true, evaluates the
-    the second element, if false, go to the next, e.g.:
-  ```lisp
-  (set cond-1 nil)
-  (set cond-2 t)
-  (set cond-3 nil)
-  (cond
-   (cond-1 (do-thing1))
-   (cond-2 (do-thing2))
-   (cond-3 (do-thing3))) ; evals (do-thing2) only
-  ```
+  - form: `(cond (<COND> <EXPR>)...)`
+  - evaluates the expressions of the form `(<COND> <EXPR>)` where `<EXPR>` is a
+    single expression. If the return value of `<COND>` is boolean `t`, then
+    execute `<EXPR>` and exit the `cond` function.
+  - example:
+    ```lisp
+      (cond
+        ((eq @sym ()) (quot (foo bar)))
+        ((foo) bar)
+    ```
 
-- function: `head`
-  - form: `head ::= <SEXP> | nil -> <SYM> | nil`
-  - gets the first element of `<SEXP>`
+- function: `left-child`/`right-child`
+  - form: `(left-child <EXPR>)`/`(right-child <EXPR>)`
+  - gets the left/right child of `<EXPR>` as a reference. Returns nil if it
+    doesn't exist.
+  - example:
+    ```lisp
+      (left-child (quot (a b c))) -> a
+      (right-child (quot (a b c))) -> b
 
-- function: `behead`
-  - form: `behead ::= <SEXP> | nil -> <SYM> | nil`
-  - gets all but the first element of `<SEXP>`
+      (left-child (quot ((a) ((b) c) d))) -> (a)
+      (right-child (quot ((a) ((b) c) d))) -> ((b) c)
 
-- function: `list`
-  - form: `list ::= <SYM> list | nil -> <SEXP>`
-  - forms an SEXP out of the elements
+      (left-child nil) -> nil
+      (right-cihld nil) -> nil
+    ```
+
+- function: `parent`
+  - form: `(parent <EXPR>)`
+  - gets the paren of `<EXPR>` as a reference. Returns nil if it doesn't exist.
+  - example:
+    ```lisp
+      (set tree (quot (a b c)))
+      (set tree (right-child tree)) -> b
+
+      (paren tree) -> a
+    ```
+
+- function: `set-left-child`/`set-right-child`
+  - form: `(set-left-child <TREE> <EXPR>)`/`(set-right-child <TREE> <EXPR>)`
+  - sets the left/right child of `<TREE>` as `<EXPR>`. Will silently fail if
+    `<TREE>` is not a SEXP tree.
+  - example:
+    ```lisp
+    (set tree (quot ())) -> ()
+    (set-left-child tree (quot a)) -> (a)
+    (set-right-child tree (quot (b))) -> (a (b))
+    (set-left-child tree nil) -> tree -> (nil (b))
+    ```
+
+- function: `set-parent`
+  - form: `(set-parent <TREE> <EXPR>)`
+  - sets the parent of `<TREE>` as `<EXPR>`. Will silently fail if `<TREE>` is
+    not a SEXP tree.
+  - example:
+    ```lisp
+    (set tree (quot (b))) -> (b)
+
+    (set tree2 (set-parent tree a)) -> (a b)
+
+    (set-parent tree2 c) -> (c (a b))
+    ```
+
+- function: `type`
+  - form: `(type <EXPR>)`
+  - returns the type of the expression `<EXPR>` as one of these types:
+    1. `@sym`
+    2. `@sexp`
+    3. `@lexp`
+  - example:
+    ```lisp
+    (type ()) -> @sym
+    (type nil) -> @sym
+    (type (quot ())) -> @sexp
+    ```
 
 - symbol: `t`
   - primitive true boolean
@@ -203,10 +371,10 @@ By design, any frontend implementation of LIBVSL will have some limitations.
 The range of elements of a function that are to be automatically literals (i.e.
 lists that won't resolute) is static.
 
-For example, the function `func` has LR set to 3, because:
+For example, the function `fun` has LR set to 3, because:
 
 ```
-(func <sym> <sym-list> <code...>)
+(fun <sym> <sym-list> <code...>)
  1    2     3          4
 ```
 
