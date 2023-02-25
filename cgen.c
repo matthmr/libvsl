@@ -104,7 +104,8 @@ void cgen_itoa_string(uint num) {
     exp *= 10;
   }
 
-  char string[1] = {0};
+  char string[2] = {0};
+
   while (exp) {
     uint dig = num / exp;
     *string  = ITOA(dig);
