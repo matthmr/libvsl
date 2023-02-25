@@ -9,14 +9,13 @@ make/*.in
 make/Cgen-obj.mk
 
 # Dev
+dev/
 TAGS
 tags
-__pycache__
 cscope*
 
 # PREVSL
 lisp.c
-!dev/c/lisp.c
 lisp
 lisp-*
 prevsl
