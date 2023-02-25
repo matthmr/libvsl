@@ -11,8 +11,6 @@
 #    define CGEN_OUTBUF (4096)
 #  endif
 
-extern const char autogen_notice[];
-
 enum cgen_typ {
   CGEN_UNKNOWN = 0,
 
