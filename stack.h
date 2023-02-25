@@ -47,16 +47,16 @@ enum lisp_stack_ev {
 ////////////////////////////////////////////////////////////////////////////////
 
 struct lisp_lex_stack {
-  bool             expr;  /** @expr:  boolean switch for SEXPs:
-                              -> false: hash
-                              -> true:  sexp              */
-  bool             over; /** @mask:   boolean switch for arguments over the
-                                      lower limit
-                              -> false: under
-                              -> true:  over              */
+  bool             lit_expr;  /** @lit_expr:  boolean switch for SEXPs:
+                                              -> false: hash
+                                              -> true:  sexp              */
+  bool             over;      /** @mask:      boolean switch for arguments over
+                                              the lower limit
+                                              -> false: under
+                                              -> true:  over              */
 
-  union lisp_fun_u mem;   /** @mem:   the stack memory    */
-  uint             paren; /** @paren: the paren level; +1 */
+  union lisp_fun_u mem;       /** @mem:       the stack memory            */
+  uint             paren;     /** @paren:     the paren level             */
 };
 
 struct lisp_sexp_stack {

@@ -43,21 +43,6 @@ static void lisp_stack_lex_frame_var(struct lisp_fun_arg* const restrict reg,
   }
 }
 
-// TODO: is this *actually* the right thing to do?
-static inline void
-lisp_stack_lex_frame_lit(struct lisp_fun_arg* const restrict reg,
-                         const struct lisp_lex_stack stack_lex) {
-
-  if (stack_lex.expr) {
-    reg->mem.sexp = stack_lex.mem.sexp;
-    reg->typ      = __LISP_VAR_SEXP;
-  }
-  else {
-    reg->mem.hash = stack_lex.mem.hash;
-    reg->typ      = __LISP_VAR_HASH;
-  }
-}
-
 static inline void
 lisp_stack_lex_frame_pop(struct lisp_fun_arg* const restrict reg,
                          const struct lisp_fun_arg pop) {
@@ -79,19 +64,20 @@ lisp_stack_lex_frame_pop(struct lisp_fun_arg* const restrict reg,
 }
 
 
-struct lisp_fun_ret lisp_stack_lex_frame(struct lisp_stack* stackp) {
+struct lisp_fun_ret lisp_stack_lex_frame(struct lisp_stack* f_stack) {
   int ret = 0;
 
   enum lisp_stack_ev ev    = {0};
   struct lisp_fun_arg* reg = NULL;
+  struct lisp_stack* stack = NULL;
+  struct lisp_frame frame  = {0};
 
   DB_MSG_SAFE("[ == ] stack(lex): stack push frame");
 
-  struct lisp_frame frame = {0};
+  frame.sym.p = lisp_symtab_get(f_stack->typ.lex.mem.hash);
 
-  frame.sym.p = lisp_symtab_get(stackp->typ.lex.mem.hash);
-
-  frame.stack = *stackp;
+  frame.stack = *f_stack;
+  stack       = &frame.stack;
   frame.reg.i = 0;
 
   // give the parent error precedence over `EISNOTFUNC'
@@ -118,12 +104,14 @@ struct lisp_fun_ret lisp_stack_lex_frame(struct lisp_stack* stackp) {
   DB_FMT("[ == ] stack(lex): stack on argp[%d]", IDX_MH(frame.reg.i));
 
   // called with pop event still set: it must've been `()'
-  if (STACK_POPPED(stackp->ev)) {
+  if (STACK_POPPED(f_stack->ev)) {
     DB_MSG_SAFE("[ == ] stack(lex): immediate pop");
     goto pop;
   }
 
 yield:
+
+  // yield literal:
   if ((frame.reg.i + 1) >= frame.sym.m.litr[0] &&
       (frame.sym.m.litr[1] == INFINITY ||
        (frame.reg.i + 1) <= frame.sym.m.litr[1])) {
@@ -131,14 +119,12 @@ yield:
 
     DB_MSG_SAFE("[ == ] stack(lex): on literal");
 
-    ret = lisp_lex_bytstream(&frame.stack);
+    ret = lisp_lex_bytstream(stack);
     ev  = frame.stack.ev;
 
-    assert(ret & (__LEX_OK | __LEX_DEFER), OR_ERR());
+    assert(ret == __LEX_OK || ret == __LEX_DEFER, OR_ERR());
 
-    if (STACK_PUSHED_VAR(ev)) {
-      frame.stack.ev &= ~__STACK_PUSHED_VAR;
-
+    if (STACK_PUSHED_VAR(ev) || stack->typ.lex.lit_expr) {
       // literal range is disjoint/infinite: save the memory in a temporary SEXP
       // tree
       // TODO: ^
@@ -147,18 +133,26 @@ yield:
         frame.stack.typ.lex.over = true;
         exit(0);
       }
-      else {
-        DB_MSG_SAFE("[ == ] stack(lex): stack push literal");
 
-        if (frame.sym.m.litr[1] != INFINITY &&
-            (frame.reg.i + 1) > frame.sym.m.size[1]) {
-          defer_as(err(EARGTOOBIG));
-        }
+      DB_MSG_SAFE("[ == ] stack(lex): stack push literal");
 
-        lisp_stack_lex_frame_lit(reg, frame.stack.typ.lex);
-        ++reg, ++frame.reg.i;
-        frame.stack.typ.lex.expr = false;
+      if (frame.sym.m.litr[1] != INFINITY &&
+          (frame.reg.i + 1) > frame.sym.m.size[1]) {
+        defer_as(err(EARGTOOBIG));
       }
+
+      if (stack->typ.lex.lit_expr) {
+        stack->typ.lex.lit_expr = false;
+        reg->mem.sexp = stack->typ.lex.mem.sexp;
+        reg->typ      = __LISP_VAR_SEXP;
+      }
+      else {
+        frame.stack.ev &= ~__STACK_PUSHED_VAR;
+        reg->mem.hash   = stack->typ.lex.mem.hash;
+        reg->typ        = __LISP_VAR_HASH;
+      }
+
+      ++reg, ++frame.reg.i;
     }
 
     if (STACK_POPPED(ev)) {
@@ -166,8 +160,6 @@ yield:
       goto pop;
     }
 
-    // better to check in the literal branch itself, instead of in every
-    // yield call
     if (frame.sym.m.litr[1] != INFINITY &&
         (frame.reg.i + 1) > frame.sym.m.litr[1]) {
       frame.stack.ev &= ~__STACK_LIT;
@@ -176,8 +168,10 @@ yield:
     goto yield;
   }
 
-  ret = lisp_lex_bytstream(&frame.stack);
-  assert(ret & (__LEX_OK | __LEX_DEFER), OR_ERR());
+  // yield expression:
+
+  ret = lisp_lex_bytstream(stack);
+  assert(ret == __LEX_OK || ret == __LEX_DEFER, OR_ERR());
 
   ev = frame.stack.ev;
 
@@ -236,7 +230,7 @@ yield:
       exit(0);
     }
     else {
-      frame.pop = lisp_stack_lex_frame(&frame.stack);
+      frame.pop = lisp_stack_lex_frame(stack);
       assert(frame.pop.slave == __LISP_FUN_OK, OR_ERR());
 
       lisp_stack_lex_frame_pop(reg, frame.pop.master);
