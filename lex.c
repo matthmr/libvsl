@@ -4,8 +4,6 @@
 #include "lex.h"   // also includes `symtab.h'
 
 // TODO: try to make these global variables stack-local (somehow)
-// TODO: STACK_QUOT should also trigger PUSH and POP; right now it's only
-// triggering POP
 
 static struct lisp_lex lex = {0};
 
@@ -100,10 +98,13 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
       // same paren level as the function of the current literal: defer;
       // will be saved in the frame
       if (stack->typ.lex.paren == (lex.master.paren+1)) {
+        // same paren level should also trigger `PUSH_VAR'
+        stack->ev |= __STACK_PUSH_VAR;
+
         if (lev & __LISP_EV_PAREN_OUT) {
           --lex.master.paren;
           lex.master.ev &= ~__LISP_EV_PAREN_OUT;
-          DB_FMT(" -> paren: %d", lex.master.paren);
+          DB_FMT(" -> paren--: %d", lex.master.paren);
           goto ev_paren_out_quot;
         }
         else if (lev & __LISP_EV_PAREN_IN) {
@@ -121,7 +122,7 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
       if (lev & __LISP_EV_PAREN_OUT) {
         --lex.master.paren;
         lex.master.ev &= ~__LISP_EV_PAREN_OUT;
-        DB_FMT(" -> paren: %d", lex.master.paren);
+        DB_FMT(" -> paren--: %d", lex.master.paren);
         goto ev_paren_out_quot;
       }
       else if (lev & __LISP_EV_PAREN_IN) {
@@ -160,7 +161,7 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
     lex.master.ev     &= ~__LISP_EV_PAREN_IN;
 
     ++lex.master.paren;
-    DB_FMT(" -> paren: %d", lex.master.paren);
+    DB_FMT(" -> paren++: %d", lex.master.paren);
 
     if (STACK_QUOT(sev)) {
       stack->typ.lex.expr = true;
@@ -200,7 +201,7 @@ ev_paren_out:
     stack->ev         |= __STACK_POP;
 
     --lex.master.paren;
-    DB_FMT(" -> paren: %d", lex.master.paren);
+    DB_FMT(" -> paren--: %d", lex.master.paren);
 
     if (STACK_QUOT(sev)) {
 ev_paren_out_quot:
@@ -377,6 +378,8 @@ int parse_bytstream(int fd) {
   iofd = fd;
 
   struct lisp_stack stack;
+
+  stack.ev           = 0;
 
   stack.typ.lex.expr = false;
   stack.typ.lex.over = false;

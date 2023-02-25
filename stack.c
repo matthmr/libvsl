@@ -136,23 +136,29 @@ yield:
 
     assert(ret & (__LEX_OK | __LEX_DEFER), OR_ERR());
 
-    // TODO: implement this
-    if (frame.sym.m.litr[0] != 0 && frame.reg.i >= frame.sym.m.litr[0]) {
-      DB_MSG_SAFE("[ == ] stack(lex): stack push literal [masked]");
-      frame.stack.typ.lex.over = true;
-      exit(0);
-    }
-    else {
-      DB_MSG_SAFE("[ == ] stack(lex): stack push literal");
+    if (STACK_PUSHED_VAR(ev)) {
+      frame.stack.ev &= ~__STACK_PUSHED_VAR;
 
-      if (frame.sym.m.litr[1] != INFINITY &&
-          (frame.reg.i + 1) > frame.sym.m.size[1]) {
-        defer_as(err(EARGTOOBIG));
+      // literal range is disjoint/infinite: save the memory in a temporary SEXP
+      // tree
+      // TODO: ^
+      if (frame.sym.m.litr[0] != 0 && frame.reg.i >= frame.sym.m.litr[0]) {
+        DB_MSG_SAFE("[ == ] stack(lex): stack push literal [masked]");
+        frame.stack.typ.lex.over = true;
+        exit(0);
       }
+      else {
+        DB_MSG_SAFE("[ == ] stack(lex): stack push literal");
 
-      lisp_stack_lex_frame_lit(reg, frame.stack.typ.lex);
-      ++reg, ++frame.reg.i;
-      frame.stack.typ.lex.expr = false;
+        if (frame.sym.m.litr[1] != INFINITY &&
+            (frame.reg.i + 1) > frame.sym.m.size[1]) {
+          defer_as(err(EARGTOOBIG));
+        }
+
+        lisp_stack_lex_frame_lit(reg, frame.stack.typ.lex);
+        ++reg, ++frame.reg.i;
+        frame.stack.typ.lex.expr = false;
+      }
     }
 
     if (STACK_POPPED(ev)) {
