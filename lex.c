@@ -201,11 +201,11 @@ ev_paren_out_quot:
       if (stack->typ.lex.lit_expr) {
         lisp_sexp_end(sexp_pp);
 
+        // the paren level now is the same as literal's: defer
         if (lex.master.paren == stack->typ.lex.paren) {
           defer_for_as(evret.slave, __LEX_DEFER);
         }
 
-        stack->typ.lex.paren = lex.master.paren;
         defer_for_as(evret.slave, __LEX_OK);
       }
 
