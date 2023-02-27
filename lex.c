@@ -111,7 +111,9 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
 
       // bigger paren level than the function of the current literal: save in a
       // temporary memory on the SEXP tree
-      lisp_sexp_sym(sexp_pp, stack->typ.lex.mem.hash);
+      assert_for(
+        lisp_sexp_sym(sexp_pp, stack->typ.lex.mem.hash) == 0,
+        OR_ERR(), evret.slave);
 
       if (lev & __LISP_EV_PAREN_OUT) {
         --lex.master.paren;
@@ -158,11 +160,16 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
     DB_FMT(" -> paren++: %d", lex.master.paren);
 
     if (STACK_QUOT(sev)) {
-      stack->typ.lex.lit_expr = true;
-      lisp_sexp_node_add(sexp_pp);
+      if (!stack->typ.lex.lit_expr) {
+        stack->typ.lex.mem.sexp = lisp_sexp_get_head();
+        stack->typ.lex.lit_expr = true;
+      }
+
+      assert_for(lisp_sexp_node_add(sexp_pp) == 0, OR_ERR(), evret.slave);
       defer_for_as(evret.slave, __LEX_OK);
     }
 
+    // only set the paren level if the expression is not quoted
     stack->typ.lex.paren = lex.master.paren;
 
     if (prime) {
@@ -203,6 +210,7 @@ ev_paren_out_quot:
 
         // the paren level now is the same as literal's: defer
         if (lex.master.paren == stack->typ.lex.paren) {
+          // lisp_sexp_end_temp(sexp_pp);
           defer_for_as(evret.slave, __LEX_DEFER);
         }
 
@@ -373,16 +381,17 @@ int parse_bytstream(int fd) {
 
   struct lisp_stack stack;
 
-  stack.ev = 0;
+  lex.master.paren = 0;
+  lex.master.ev    = 0;
+  lex.slave        = 0;
 
+  stack.ev               = 0;
   stack.typ.lex.lit_expr = false;
-  stack.typ.lex.over     = false;
+  stack.typ.lex.lazy     = NULL;
+  stack.typ.lex.paren    = lex.master.paren;
 
-  lex.master.ev = 0;
-  lex.slave     = 0;
-
-  // we need a stack-local `stack', so we wrap `parse_bytstream'
-  // with a `*_stack' function. this means this function does not
-  // receive or send any callbacks from/to the stack
+  /** we need a stack-local `stack', so we wrap `parse_bytstream' with a
+      `*_stack' function. this means this function (parse_bytstream) does not
+      receive or send any callbacks from/to the stack */
   return parse_bytstream_stack(&stack);
 }

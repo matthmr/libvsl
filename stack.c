@@ -124,14 +124,21 @@ yield:
 
     assert(ret == __LEX_OK || ret == __LEX_DEFER, OR_ERR());
 
+    // NOTE: `::lit_expr` *doesn't* trigger `PUSH_VAR`
     if (STACK_PUSHED_VAR(ev) || stack->typ.lex.lit_expr) {
-      // literal range is disjoint/infinite: save the memory in a temporary SEXP
-      // tree
-      // TODO: ^
+
+      /** literal range is disjoint/infinite: save the memory a temporary SEXP
+          tree; lazily evaluated
+       */
       if (frame.sym.m.litr[0] != 0 && frame.reg.i >= frame.sym.m.litr[0]) {
         DB_MSG_SAFE("[ == ] stack(lex): stack push literal [masked]");
-        frame.stack.typ.lex.over = true;
-        exit(0);
+
+        ret = lisp_sexp_node_add(sexp_pp);
+        assert(ret == 0, OR_ERR());
+
+        if (!frame.stack.typ.lex.lazy) {
+          frame.stack.typ.lex.lazy = lisp_sexp_get_head();
+        }
       }
 
       DB_MSG_SAFE("[ == ] stack(lex): stack push literal");
@@ -139,6 +146,10 @@ yield:
       if (frame.sym.m.litr[1] != INFINITY &&
           (frame.reg.i + 1) > frame.sym.m.size[1]) {
         defer_as(err(EARGTOOBIG));
+      }
+
+      if (frame.stack.typ.lex.lazy) {
+        goto yield;
       }
 
       if (stack->typ.lex.lit_expr) {
@@ -182,7 +193,6 @@ yield:
     DB_FMT("[ == ] stack(lex): stack push variable argp[%d]", frame.reg.i);
 
     frame.stack.ev &= ~__STACK_PUSHED_VAR;
-    ++reg;
 
     if (frame.sym.m.size[1] != INFINITY &&
         (frame.reg.i + 1) > frame.sym.m.size[1]) {
@@ -191,11 +201,12 @@ yield:
 
     if ((frame.reg.i + 1) > frame.sym.m.size[0]) {
       DB_MSG_SAFE("[ == ] stack(lex): stack push variable [masked]");
-      if (frame.stack.typ.lex.over) {
-      }
-      else {
-        frame.stack.typ.lex.over = true;
-        exit(0);
+
+      ret = lisp_sexp_sym(sexp_pp, frame.stack.typ.lex.mem.hash);
+      assert(ret == 0, OR_ERR());
+
+      if (!frame.stack.typ.lex.lazy) {
+        frame.stack.typ.lex.lazy = lisp_sexp_get_head();
       }
     }
     else {
@@ -217,7 +228,6 @@ yield:
     DB_FMT("[ == ] stack(lex): stack push function argp[%d]", frame.reg.i);
 
     frame.stack.ev &= ~__STACK_PUSHED_FUNC;
-    ++reg;
 
     if (frame.sym.m.size[1] != INFINITY &&
         (frame.reg.i + 1) > frame.sym.m.size[1]) {
@@ -226,8 +236,13 @@ yield:
 
     if ((frame.reg.i + 1) > frame.sym.m.size[0]) {
       DB_MSG_SAFE("[ == ] stack(lex): stack push function [masked]");
-      frame.stack.typ.lex.over = true;
-      exit(0);
+
+      ret = lisp_sexp_node_add(sexp_pp);
+      assert(ret == 0, OR_ERR());
+
+      if (!frame.stack.typ.lex.lazy) {
+        frame.stack.typ.lex.lazy = lisp_sexp_get_head();
+      }
     }
     else {
       frame.pop = lisp_stack_lex_frame(stack);

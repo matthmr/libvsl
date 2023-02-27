@@ -4,27 +4,22 @@
 #undef LOCK_POOL_DEF
 #undef LOCK_POOL_THREAD
 
-#include "pool.h"
+#include "pool.h"  // also includes `err.h'
 
 static struct lisp_sexp* head = NULL;
 struct lisp_sexp* root        = NULL;
 
 POOL_T** sexp_pp = &POOL_P;
 
-// TODO: this is wrong with the new lexer; please refactor
 static inline void pool_clean(POOL_T* pp) {
-  for (; pp; pp = pp->next) {
-    pp->c_idx = 0;
-    for (uint i = 0; i < POOL_AM; ++i) {
-      pp->mem[i].t = 0;
-    }
-  }
-
-  // head = NULL;
+  // TODO: stub
+  return;
 }
 
 static inline POOL_RET_T
 lisp_sexp_node_get_pos(enum sexp_t t, POOL_RET_T pr, struct lisp_sexp* head) {
+  // NOTE: this function cannot error
+
   uint cidx = 0;
   uint pidx = 0;
 
@@ -206,17 +201,21 @@ stage3b_popped:
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void lisp_sexp_node_add(POOL_T** mpp) {
+int lisp_sexp_node_add(POOL_T** mpp) {
+  int ret = 0;
+
   DB_MSG("[ == ] sexp: lisp_sexp_node_add()");
 
   if (!head) {
     head          = root;
     (*mpp)->p_idx = 1;
-    return;
+    defer_as(0);
   }
 
   POOL_RET_T pr              = pool_add_node(*mpp);
   struct lisp_sexp* new_head = pr.entry;
+
+  assert(pr.stat == 0, OR_ERR());
 
   if (pr.new != pr.base) {
     *mpp = pr.new;
@@ -282,6 +281,8 @@ void lisp_sexp_node_add(POOL_T** mpp) {
     pr       = pool_add_node(*mpp);
     new_head = pr.entry;
 
+    assert(pr.stat == 0, OR_ERR());
+
     if (pr.new != pr.base) {
       *mpp = pr.new;
     }
@@ -313,13 +314,17 @@ void lisp_sexp_node_add(POOL_T** mpp) {
 
     head = new_head;
   }
+
+  done_for(ret);
 }
 
-void lisp_sexp_sym(POOL_T** mpp, struct lisp_hash hash) {
+int lisp_sexp_sym(POOL_T** mpp, struct lisp_hash hash) {
+  int ret = 0;
+
   /** for now, top-level symbols are silently ignored
    */
   if (!head) {
-    return;
+    defer_as(0);
   }
 
   DB_MSG("[ == ] sexp: lisp_sexp_sym()");
@@ -359,6 +364,8 @@ void lisp_sexp_sym(POOL_T** mpp, struct lisp_hash hash) {
     POOL_RET_T pr               = pool_add_node(*mpp);
     struct lisp_sexp* lexp_head = pr.entry;
 
+    assert(pr.stat == 0, OR_ERR());
+
     if (pr.new != pr.base) {
       *mpp = pr.new;
     }
@@ -396,9 +403,13 @@ void lisp_sexp_sym(POOL_T** mpp, struct lisp_hash hash) {
 
     head = lexp_head;
   }
+
+  done_for(ret);
 }
 
 void lisp_sexp_end(POOL_T** mpp) {
+  // NOTE: this function cannot error
+
   DB_MSG("[ == ] sexp: lisp_sexp_end()");
 
   POOL_RET_T pr = {0};
@@ -445,6 +456,11 @@ int lisp_sexp_eval(POOL_T** mpp) {
   lisp_sexp_trans(&stack);
 
   done_for_with(ret, pool_clean(*mpp));
+}
+
+// used on the stack to get the root of a temporary SEXP tree
+struct lisp_sexp* lisp_sexp_get_head(void) {
+  return head;
 }
 
 void sexp_init(void) {

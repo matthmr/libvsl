@@ -125,7 +125,7 @@ static POOL_RET_T pool_add_node(POOL_T* pp) {
    Gets a memory pool thread from a given index. The difference is computed
    relatively, so we don't *always* have O(n) time search
 
-   @pp:   the current pool thread
+   @pp:    the current pool thread
    @c_idx: the given index
  */
 static POOL_RET_T pool_from_idx(POOL_T* pp, uint c_idx) {

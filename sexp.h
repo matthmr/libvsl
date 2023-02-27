@@ -50,9 +50,9 @@ enum sexp_t {
 
 struct pos_t {
   uint pidx; /** @pidx: offset for the appropriate type; relative to the base
-                        of a pool section                    */
-  uint  cidx; /** @cidx: index of the pool section;
-                         mirrored by `pool.h:MEMPOOL::c_idx' */
+                        of a pool section                   */
+  uint cidx; /** @cidx: index of the pool section;
+                        mirrored by `pool.h:MEMPOOL::c_idx' */
 };
 
 // TODO: add `struct lisp_sym` as a type
@@ -110,9 +110,12 @@ void sexp_init(void);
 
 extern POOL_T** sexp_pp;
 
-void lisp_sexp_sym(POOL_T** mpp, struct lisp_hash hash);
 void lisp_sexp_end(POOL_T** mpp);
-void lisp_sexp_node_add(POOL_T** mpp);
+
+int  lisp_sexp_sym(POOL_T** mpp, struct lisp_hash hash);
+int  lisp_sexp_node_add(POOL_T** mpp);
 int  lisp_sexp_eval(POOL_T** mpp);
+
+struct lisp_sexp* lisp_sexp_get_head(void);
 
 #endif
