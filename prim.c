@@ -82,7 +82,7 @@ CLISP_PRIM() {
   ret.master.typ = __LISP_VAR_SYM;
   ret.master.mem.sym = argp[0].mem.sym;
 
-  done_for(ret);
+  return ret;
 }
 
 CLISP_PRIM(set) {

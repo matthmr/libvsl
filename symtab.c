@@ -14,8 +14,8 @@
                                      uint lower, uint upper) {         \
     return hash.x > ppm[lower].hash.x && hash.x < ppm[upper].hash.x;   \
   } \
-  static inline bool repeats__##x(struct sort_t* sort) {               \
-    return sort->mask &= __LISP_HASH_##x;                              \
+  static inline bool repeats__##x(const struct sort_t* sort) {         \
+    return sort->mask & __LISP_HASH_##x;                               \
   } \
   static inline uint yield__##x(struct lisp_sym* ppm, uint i) {        \
     return (uint) ppm[i].hash.x;                                       \
@@ -168,7 +168,9 @@ done:
 static struct lisp_sort_ret
 lisp_symtab_sort_lsmall(const uint pp_idx, struct lisp_sym* mem,
                         struct lisp_hash hash, const struct sort_t* sort) {
-  struct lisp_sort_ret ret = {
+  register int ret = 0;
+
+  struct lisp_sort_ret ret_t = {
     .master = -1u,
   };
 
@@ -180,45 +182,44 @@ lisp_symtab_sort_lsmall(const uint pp_idx, struct lisp_sym* mem,
 
     if (sort->lt(yie, hash)) {
       if (yie > lower) {
-        ret.master = IDX_MH(i);
+        ret_t.master = IDX_MH(i);
       }
+
+      continue;
     }
 
-    else if (sort->eq(yie, hash)) {
-      defer_for_as(ret.slave, __SORT_NEXT);
-    }
+    assert(!sort->eq(yie, hash), __SORT_NEXT);
 
     // greater-than: we're done
-    else {
-      break;
-    }
+    break;
   }
 
   // we didn't find anything: the thread is probably not sorted, it's safe to
   // put ourselves at the first position
-  if (ret.master == -1u) {
-    ret.master = 1;
+  if (ret_t.master == -1u) {
+    ret_t.master = 1;
   }
 
-  defer_for_as(ret.slave, (ret.master == pp_idx)? __SORT_RETURN: __SORT_OK);
+  defer((ret_t.master == pp_idx)? __SORT_RETURN: __SORT_OK);
 
-  done_for(ret);
+  done_for_with(ret_t, ret_t.slave = ret);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
 static int lisp_symtab_sort_base(POOL_T* pp, uint idx, struct lisp_hash hash,
                                  const struct sort_t* sort) {
-  int ret             = 0;
+  register int ret = 0;
 
-  POOL_T* cpp         = NULL;
-  const POOL_T* base  = pp;
-  const uint base_idx = idx;
+  POOL_T* cpp  = NULL,
+        * base = pp;
 
   struct lisp_sym* mem       = pp->mem,
                  * base_mem  = base->mem;
   struct lisp_sort_ret sstat = {0};
   struct lisp_sort_same_ret smstat = {0};
+
+  const uint base_idx = idx;
 
   // we're the biggest: the good ending
   if (IDX_HM(idx) == 0) {
@@ -226,14 +227,10 @@ static int lisp_symtab_sort_base(POOL_T* pp, uint idx, struct lisp_hash hash,
     pp  = pp->prev;
 
     // nothing to sort
-    if (!pp) {
-      defer_as(0);
-    }
+    assert(pp, 0);
 
     // check against the previous thread
-    if (sort->lt(sort->yield(pp->mem, IDX_HM(SYMPOOL)), hash)) {
-      defer_as(0);
-    }
+    assert(!sort->lt(sort->yield(pp->mem, IDX_HM(SYMPOOL)), hash), 0);
 
     pp = cpp;
   }
@@ -286,7 +283,6 @@ static int lisp_symtab_sort_base(POOL_T* pp, uint idx, struct lisp_hash hash,
     defer_as(0);
   }
 
-
 next:
   base_mem->hash.rep |= sort->mask;
   smstat = lisp_symtab_sort_lsame(pp, sstat.master, hash, sort);
@@ -294,13 +290,10 @@ next:
   // if we're here, we have to back-prog either way, so might as well do it now
   lisp_symtab_sort_backprog(base, base_idx, smstat.pp, smstat.idx);
 
-  if (sort->next) {
-    assert(lisp_symtab_sort_base(smstat.pp, smstat.idx, hash, sort->next) == 0,
-           OR_ERR());
-  }
-  else {
-    defer(err(EHASHERR));
-  }
+  assert(sort->next, err(EHASHERR));
+
+  ret = lisp_symtab_sort_base(smstat.pp, smstat.idx, hash, sort->next);
+  assert(ret == 0, OR_ERR());
 
   done_for(ret);
 }
@@ -322,8 +315,10 @@ static int lisp_symtab_sort(POOL_T* pp, uint idx, struct lisp_hash hash) {
 static struct lisp_sym_ret
 lisp_symtab_get_sorted(POOL_T* pp, struct lisp_hash hash,
                        const struct sort_t* sort) {
+  register int ret = 0;
+
   POOL_T* cpp = NULL;
-  struct lisp_sym_ret ret = {0};
+  struct lisp_sym_ret ret_t = {0};
 
   struct lisp_sym* mem = NULL;
 
@@ -343,47 +338,46 @@ lisp_symtab_get_sorted(POOL_T* pp, struct lisp_hash hash,
             goto next;
           }
 
-          ret.master = (mem+i);
+          ret_t.master = (mem+i);
           defer();
         }
       }
     }
 
     // `mem[pp->idx - 1].x < hash.x' means we're way out of range
-    if (sort->lt(sort->yield(mem, IDX_HM(pp->p_idx)), hash)) {
-      defer_for_as(ret.slave, 1);
-    }
+    assert(!sort->lt(sort->yield(mem, IDX_HM(pp->p_idx)), hash), 1);
 
     pp = pp->next;
   } while (pp);
 
-  assert_for(ret.master != NULL && ret.slave == 0, 1, ret.slave);
+  assert(ret_t.master != NULL, 1);
 
 next:
   pp = cpp;
 
   if (sort->next) {
-    ret = lisp_symtab_get_sorted(pp, hash, sort->next);
-    assert_for(ret.slave == 0, 1, ret.slave);
+    ret_t = lisp_symtab_get_sorted(pp, hash, sort->next);
+    ret   = ret_t.slave;
+    assert(ret == 0, 1);
   }
   else {
-    assert_for(ret.slave == 0, 1, ret.slave);
+    assert(ret == 0, 1);
   }
 
-  done_for(ret);
+  done_for_with(ret_t, ret_t.slave = ret);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
 struct lisp_hash_ret inc_hash(struct lisp_hash hash, char c) {
+  register int ret = 0;
+
   struct lisp_hash_ret hash_ret = {
     .master = hash,
     .slave  = 0,
   };
 
-  if (hash.len > SYMTAB_MAX_SYM) {
-    defer_for_as(hash_ret.slave, err(EIDTOOBIG));
-  }
+  assert(hash.len < SYMTAB_MAX_SYM, err(EIDTOOBIG));
 
   ASCII_NORM(c);
 
@@ -407,7 +401,7 @@ struct lisp_hash_ret inc_hash(struct lisp_hash hash, char c) {
 
   hash_ret.master = hash;
 
-  done_for(hash_ret);
+  done_for_with(hash_ret, hash_ret.slave = ret);
 }
 
 void inc_hash_done(struct lisp_hash* hash) {
@@ -424,6 +418,8 @@ void hash_done(struct lisp_hash* hash) {
 }
 
 struct lisp_hash_ret str_hash(const char* str) {
+  register int ret = 0;
+
   struct lisp_hash_ret hash_ret = {
     .master = {0},
     .slave  = 0,
@@ -435,17 +431,21 @@ struct lisp_hash_ret str_hash(const char* str) {
 
   for (uint i = 0; (c = str[i]); ++i) {
     hash_ret = inc_hash(hash_ret.master, c);
+    ret      = hash_ret.slave;
+
     DB_FMT("[ == ] symtab: character (%c) (%d)", c, hash_ret.master.sum);
 
-    assert_for(hash_ret.slave == 0, OR_ERR(), hash_ret.slave);
+    assert(ret == 0, OR_ERR());
   }
 
   inc_hash_done(&hash_ret.master);
-  done_for(hash_ret);
+  done_for_with(hash_ret, hash_ret.slave = ret);
 }
 
 static struct lisp_sym_ret lisp_symtab_get_for_set(struct lisp_hash hash) {
-  struct lisp_sym_ret ret = {0};
+  register int ret = 0;
+
+  struct lisp_sym_ret ret_t = {0};
   const uint idx = HASH_IDX(hash);
 
   POOL_T* base_pp = symtab_pp[idx].base;
@@ -457,17 +457,17 @@ static struct lisp_sym_ret lisp_symtab_get_for_set(struct lisp_hash hash) {
 
   DB_FMT("[ == ] symtab(get-for-set): trying to get index %d", idx);
 
-  ret = lisp_symtab_get_sorted(base_pp, hash, sort_entry);
+  ret_t = lisp_symtab_get_sorted(base_pp, hash, sort_entry);
+  ret   = ret_t.slave;
 
-  assert_for(ret.slave == 0 && hash_eq(ret.master->hash, hash),
-             1, ret.slave);
+  assert(ret == 0 && hash_eq(ret_t.master->hash, hash), 1);
 
-  done_for(ret);
+  done_for_with(ret_t, ret_t.slave = ret);
 }
 
 // TODO: we could probably return `struct lisp_sym_ret' like `get' does
 int lisp_symtab_set(struct lisp_sym sym) {
-  int ret = 0;
+  register int ret = 0;
 
   const uint idx = HASH_IDX(sym.hash);
   uint pp_idx    = 0;
@@ -476,7 +476,7 @@ int lisp_symtab_set(struct lisp_sym sym) {
 
   // what we're trying to set already exists
   if (sym_ret.master) {
-    // TODO: stub
+    // TODO: stub; should overwrite the existing symbol
     DB_MSG("[ == ] symtab: symbol to be set already exists");
     defer();
   }
@@ -502,22 +502,23 @@ int lisp_symtab_set(struct lisp_sym sym) {
 }
 
 struct lisp_sym_ret lisp_symtab_get(struct lisp_hash hash) {
-  struct lisp_sym_ret ret = {0};
+  register int ret = 0;
+
+  struct lisp_sym_ret ret_t = {0};
   const uint idx = HASH_IDX(hash);
 
   POOL_T* base_pp = symtab_pp[idx].base;
 
-  if (!base_pp->p_idx) {
-    defer_for_as(ret.slave, err(ENOTFOUND));
-  }
+  assert(base_pp->p_idx, err(ENOTFOUND));
 
   DB_FMT("[ == ] symtab: trying to get index %d", idx);
 
-  ret = lisp_symtab_get_sorted(base_pp, hash, sort_entry);
-  assert_for(ret.slave == 0 && hash_eq(ret.master->hash, hash),
-             err(ENOTFOUND), ret.slave);
+  ret_t = lisp_symtab_get_sorted(base_pp, hash, sort_entry);
+  ret   = ret_t.slave;
 
-  done_for(ret);
+  assert(ret == 0 && hash_eq(ret_t.master->hash, hash), err(ENOTFOUND));
+
+  done_for_with(ret_t, ret_t.slave = ret);
 }
 
 void symtab_init(void) {

@@ -21,6 +21,8 @@ extern Frontend frontend;
 #    include <stdlib.h>
 #    include <unistd.h>
 
+#    define LOCK_POOL_DEF
+
 #    include "sexp.h" // also includes `symtab.h'
 #    include "lex.h"  // also includes `symtab.h', `stack.h'
 

@@ -1,7 +1,7 @@
 #ifndef LOCK_PRIM
 #  define LOCK_PRIM
 
-// the symbol table is defined by CGEN
+#  define LOCK_POOL_DEF
 #  include "symtab.h" // also includes `utils.h`, `err.h'
 
 #  define CLISP_PRIM_FUN(__fun,_s0,_s1,_l0,_l1) \

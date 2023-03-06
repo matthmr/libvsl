@@ -1,5 +1,6 @@
 #include <unistd.h>
 
+#define LOCK_POOL_DEF
 #define PROVIDE_SYMTAB_TABDEF
 
 #include "debug.h"
@@ -19,28 +20,30 @@ static void __cgen_preamble(void) {
     LINE(""));
 }
 
-static int __cgen_compile_prim(struct clisp_sym* tab) {
+static int __cgen_compile_prim(const struct clisp_sym* tab) {
+  int ret = 0;
+
   // this interface is ugly but it is what it is
   struct {
     struct lisp_sym      master;
     struct lisp_hash_ret hash_sb;
     int slave;
-  } ret = {0};
+  } ret_t = {0};
 
   for (; tab->str; ++tab) {
-    ret.hash_sb = str_hash(tab->str);
+    ret_t.hash_sb = str_hash(tab->str);
 
-    ret.slave = ret.hash_sb.slave;
-    assert_for(ret.slave == 0, OR_ERR(), ret.slave);
+    ret = ret_t.hash_sb.slave;
+    assert(ret == 0, OR_ERR());
 
-    ret.master = tab->sym;
-    ret.master.hash = ret.hash_sb.master;
+    ret_t.master = tab->sym;
+    ret_t.master.hash = ret_t.hash_sb.master;
 
-    ret.slave = lisp_symtab_set(ret.master);
-    assert_for(ret.slave == 0, OR_ERR(), ret.slave);
+    ret = lisp_symtab_set(ret_t.master);
+    assert(ret == 0, OR_ERR());
   }
 
-  done_for(ret.slave);
+  done_for(ret);
 }
 
 static void __cgen_transpile_sym_field(char* field, uint idx, uint pidx) {
@@ -108,7 +111,7 @@ static void __cgen_transpile_sym_data(POOL_T* pp, uint idx, uint pidx,
     cgen_field("com_part", CGEN_SHORT,   &sym[i].hash.com_part);
     cgen_close_field();
     cgen_field("dat",      CGEN_STRING,  sym[i].dat);
-    cgen_field("typ",      CGEN_STRING,  __cgen_sym_typ[sym[i].typ]);
+    cgen_field("typ",      CGEN_STRING,  (void*) __cgen_sym_typ[sym[i].typ]);
     if (sym[i].typ == __LISP_CLISP_FUN) {
       cgen_field_array("size", CGEN_INT, sym[i].size, SIZEOF(sym[i].size));
       cgen_field_array("litr", CGEN_INT, sym[i].litr, SIZEOF(sym[i].litr));

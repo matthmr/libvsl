@@ -202,15 +202,13 @@ stage3b_popped:
 ////////////////////////////////////////////////////////////////////////////////
 
 int lisp_sexp_node_add(POOL_T** mpp) {
-  int ret = 0;
+  register int ret = 0;
 
   DB_MSG("[ == ] sexp: lisp_sexp_node_add()");
 
-  if (!head) {
-    head          = root;
-    (*mpp)->p_idx = 1;
-    defer_as(0);
-  }
+  assert(head, (
+           (head = root),
+           ((*mpp)->p_idx = 1), 0));
 
   POOL_RET_T pr              = pool_add_node(*mpp);
   struct lisp_sexp* new_head = pr.entry;
@@ -319,13 +317,11 @@ int lisp_sexp_node_add(POOL_T** mpp) {
 }
 
 int lisp_sexp_sym(POOL_T** mpp, struct lisp_hash hash) {
-  int ret = 0;
+  register int ret = 0;
 
   /** for now, top-level symbols are silently ignored
    */
-  if (!head) {
-    defer_as(0);
-  }
+  assert(head, 0);
 
   DB_MSG("[ == ] sexp: lisp_sexp_sym()");
 
@@ -444,7 +440,7 @@ again:
 
 // TODO: this is wrong with the new lexer; please refactor
 int lisp_sexp_eval(POOL_T** mpp) {
-  int ret = 0;
+  register int ret = 0;
 
   struct lisp_stack stack;
 

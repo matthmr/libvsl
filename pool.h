@@ -96,8 +96,6 @@ static POOL_RET_T pool_add_node(POOL_T* pp) {
 
   if (pp->p_idx == POOL_AM) {
     if (!pp->next) {
-      // TODO: even though this has no way to get leaked,
-      //       free it when exiting `main'; also
       pp->next = malloc(sizeof(POOL_T));
 
       // OOM (somehow)

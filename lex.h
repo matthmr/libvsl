@@ -35,6 +35,18 @@ enum lisp_lex_ev {
   __LISP_EV_SYMBOL_IN  = BIT(3),
 };
 
+#  define LEX_PAREN_IN(ev) \
+  ((ev) & __LISP_EV_PAREN_IN)
+
+#  define LEX_PAREN_OUT(ev) \
+  ((ev) & __LISP_EV_PAREN_OUT)
+
+#  define LEX_SYMBOL_OUT(ev) \
+  ((ev) & __LISP_EV_SYMBOL_OUT)
+
+#  define LEX_SYMBOL_IN(ev) \
+  ((ev) & __LISP_EV_SYMBOL_IN)
+
 
 enum lisp_lex_stat {
   __LEX_NO_INPUT     = -2,

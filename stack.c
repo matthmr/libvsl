@@ -31,10 +31,10 @@ void lisp_stack_sexp_pop(struct lisp_stack* stack, POOL_T* mpp,
 
 ////////////////////////////////////////////////////////////////////////////////
 
+// TODO: stub
 static void lisp_stack_lex_frame_var(struct lisp_fun_arg* const restrict reg,
                                      const struct lisp_sym* const sym) {
 
-  // TODO: stub
   switch (sym->typ) {
   case __LISP_VAR_SYM:
     break;
@@ -64,6 +64,7 @@ lisp_stack_lex_frame_pop(struct lisp_fun_arg* const restrict reg,
 }
 
 
+// TODO: refactor the expression yielding to its own function
 struct lisp_fun_ret lisp_stack_lex_frame(struct lisp_stack* f_stack) {
   int ret = 0;
 
@@ -72,16 +73,15 @@ struct lisp_fun_ret lisp_stack_lex_frame(struct lisp_stack* f_stack) {
   struct lisp_stack* stack = NULL;
   struct lisp_frame frame  = {0};
 
-  DB_MSG_SAFE("[ == ] stack(lex): stack push frame");
+  DB_MSG_SAFE("[ == ] stack(lex): push frame");
 
   frame.sym.p = lisp_symtab_get(f_stack->typ.lex.mem.hash);
+  assert(frame.sym.p.slave == 0, OR_ERR());
 
   frame.stack = *f_stack;
   stack       = &frame.stack;
   frame.reg.i = 0;
 
-  // give the parent error precedence over `EISNOTFUNC'
-  assert(frame.sym.p.slave == 0, OR_ERR());
   assert(frame.sym.p.master->typ == __LISP_VAR_FUN &&
          frame.sym.p.master->dat != NULL,
          err(EISNOTFUNC));
