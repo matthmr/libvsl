@@ -1,11 +1,12 @@
 define(`__target_link__', `')dnl
 dnl
+define(`librec', `ifelse($1, `', , `$1.a librec(shift($@))')')dnl
 define(`rec', `ifelse($1, `', ,`$1 rec(shift($@))')')dnl
 define(`ifrec', `ifelse($1, `', ,`ifelse($2, `1', `$1 ifrec(shift(shift($@)))', )')')dnl
 dnl
 define(`target', `define(`__target__', `$1')')dnl
 define(`target_obj', `define(`__target_objects__', `rec($@)')')dnl
-define(`target_link_local', `define(`__target_link__', `rec($@)')')dnl
+define(`target_link_local', `define(`__target_link__', `librec($@)')')dnl
 define(`target_gen', `dnl
 ifelse(`__target_link__', `',, `LINK_LOCAL:' __target_link__
 )dnl

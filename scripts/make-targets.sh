@@ -23,13 +23,18 @@ awk -F: '
 BEGIN {
   cmsg="";
   ccmd="";
-  link="";
+  link_cmd="";
+  link_lib="";
 }
 /^LINK_LOCAL: .+/ {
-  link=$2;
-  gsub(/ $/, "", link);
-  gsub(/ /, " -l", link);
-  link="-L. " link;
+  link_cmd=$2;
+  link_lib=$2;
+  gsub(/ $/, "", link_cmd);
+  gsub(/ $/, "", link_lib);
+  gsub(/\.a/, "", link_cmd);
+  gsub(/ /, " -l", link_cmd);
+  gsub(/ /, " lib", link_lib);
+  link_cmd="-L. " link_cmd;
   next;
 }
 /^LINK_LOCAL: $/ {
@@ -47,10 +52,11 @@ BEGIN {
   }
 
   cmsg = "@echo \"CC " base "\"";
-  ccmd = "@$(CC) M4FLAG_include_" base_include " $(CFLAGS) $(CFLAGSADD) " link " $^ -o $@";
+  ccmd = "@$(CC) M4FLAG_include_" base_include " $(CFLAGS) $(CFLAGSADD) " link_cmd " $^ -o $@";
 
-  printf "%s\n\t%s\n\t%s\n", $0, cmsg, ccmd;
-  link="";
+  printf "%s %s\n\t%s\n\t%s\n", $0, link_lib, cmsg, ccmd;
+  link_lib="";
+  link_cmd="";
 }
 ' |\
   sed -e 's/M4FLAG_include_[0-9A-Za-z_]*/ /g' > make/Targets.mk
