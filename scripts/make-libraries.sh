@@ -23,10 +23,10 @@ echo "[ == ] $M4 make/Libraries.m4 > make/Libaries.mk"
 eval "$M4 $M4FLAGS make/Libraries.m4" > make/Libraries.mk
 
 echo "[ == ] cat make/Libraries.m4 | $SED >> make/Libaries.mk"
-eval "$M4 $M4FLAGS make/Libraries.m4" |\
-  cut -d: -f1                         |\
-  tr '\n' ' '                         |\
-  sed 's: $:\n:'                     |\
+eval "$M4 $M4FLAGS make/Libraries.m4"  |\
+  cut -d: -f1                          |\
+  tr '\n' ' '                          |\
+  sed -e 's: $:\n:' -e 's: \{2,\}: :g' |\
   sed -e 's/^/LIBRARIES:=&/g' >> make/Libraries.mk
 
 echo '
