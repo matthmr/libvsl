@@ -214,7 +214,7 @@ ev_paren_out_quot:
           defer_as(__LEX_DEFER);
         }
 
-        defer_for_as(evret.slave, __LEX_OK);
+        defer_as(__LEX_OK);
       }
 
       stack->ev |= __STACK_POP;
