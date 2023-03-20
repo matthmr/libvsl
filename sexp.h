@@ -2,7 +2,7 @@
 #  define LOCK_SEXP
 
 #  ifndef SEXPPOOL
-#    define SEXPPOOL (32)
+#    define SEXPPOOL (64)
 #  endif
 
 #  define LOCK_SYMTAB_INTERNALS

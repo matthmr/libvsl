@@ -9,7 +9,7 @@
 
 int main(void) {
   sexp_init();
-  symtab_init();
+  symtab_init(false);
 
   if (frontend && frontend() != 0) {
     return err(EFRONTEND);

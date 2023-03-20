@@ -1,5 +1,6 @@
 #include "symtab.h" // also includes `pool.h'
 #include "debug.h"
+#include "err.h"
 
 // TODO: implement lexical scoping
 
@@ -45,12 +46,15 @@ SORT_FUNC_FOR(sum);
 SORT_FUNC_FOR(psum);
 SORT_FUNC_FOR(com_part);
 
-static const struct sort_t* sort_entry = &sort_len;
+static struct sort_t* const sort_entry = &sort_len;
 
 ////////////////////////////////////////////////////////////////////////////////
 
 static uint hash_i = 1;
+// POOL_T* const symtab = NULL;
 
+// NOTE: this init is a bit bigger, so it's better to for it to be initialized
+// in .data already. the same is *not* true for `sexp.c'
 struct lisp_symtab_pp symtab_pp[SYMTAB_CELL] = {0};
 
 // TODO: stub
@@ -521,7 +525,16 @@ struct lisp_sym_ret lisp_symtab_get(struct lisp_hash hash) {
   done_for_with(ret_t, ret_t.slave = ret);
 }
 
-void symtab_init(void) {
+int symtab_init(bool force) {
+  register int ret = 0;
+
+  // NOTE: `symtab' is init'd through CGEN, its values are already initialized
+  // *UNLESS* when calling from CGEN itself, in which case we force init
+  if (force) {
+    symtab = calloc(sizeof(POOL_T), SYMTAB_CELL);
+    assert(symtab, err(EOOM));
+  }
+
   for (uint i = 0; i < SYMTAB_CELL; ++i) {
     symtab_pp[i].mem = symtab_pp[i].base = (symtab + i);
   }
@@ -529,4 +542,6 @@ void symtab_init(void) {
   sort_len.next  = &sort_sum;
   sort_sum.next  = &sort_psum;
   sort_psum.next = &sort_com_part;
+
+  done_for(ret);
 }

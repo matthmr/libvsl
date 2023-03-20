@@ -93,8 +93,8 @@ struct lisp_sym {
   void*             dat;  /** @dat:  data for the symbol    */
   enum lisp_sym_typ typ;  /** @typ:  type of the symbol     */
 
-  uint size[2];           /** @size: argument range; masked */
-  uint litr[2];           /** @litr: literal range: < size  */
+  uint          size[2];  /** @size: argument range; masked */
+  uint          litr[2];  /** @litr: literal range: < size  */
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -153,8 +153,8 @@ struct lisp_symc_ret {
 
 enum lisp_sort_stat {
   __SORT_RETURN = -1,
-  __SORT_OK     = 0,
-  __SORT_NEXT   = 1,
+  __SORT_OK     =  0,
+  __SORT_NEXT   =  1,
 };
 
 struct lisp_sort_ret {
@@ -172,7 +172,7 @@ void hash_done(struct lisp_hash* hash);
 int lisp_symtab_set(struct lisp_sym sym);
 struct lisp_sym_ret lisp_symtab_get(struct lisp_hash hash);
 
-void symtab_init(void);
+int symtab_init(bool force);
 #endif
 
 #ifndef LOCK_SYMTAB_INTERNALS
@@ -181,20 +181,9 @@ void symtab_init(void);
 #  define POOL_ENTRY_T struct lisp_sym
 #  define POOL_AM      SYMPOOL
 
-#  define LOCK_POOL_THREAD
 #  include "pool.h"
 
-#  ifndef PROVIDE_SYMTAB_TABDEF
-extern
-#  endif
-
-POOL_T symtab[SYMTAB_CELL]
-
-#  ifndef PROVIDE_SYMTAB_TABDEF
-;
-#  else
-= {0};
-#  endif
+extern POOL_T* symtab;
 
 struct lisp_symtab_pp {
   POOL_T* mem;

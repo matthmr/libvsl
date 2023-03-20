@@ -62,6 +62,7 @@ struct lisp_fun_ret {
   enum lisp_fun_ret_t slave;
 };
 
+// TODO: like LIBC, take `ENV' as the environment (scope) for the function
 typedef struct lisp_fun_ret
 (*lisp_fun) (struct lisp_fun_arg* argp, uint argv);
 

@@ -4,8 +4,8 @@
 #include <unistd.h>
 #include <stdlib.h>
 
+#include "libcgen.h"
 #include "debug.h"
-#include "cgen.h"
 
 static string_i outbuf = {
   .idx = 0,

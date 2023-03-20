@@ -3,6 +3,7 @@
 // TODO: make this more verbose
 // TODO: make this optional
 
+#include "debug.h"
 #include "err.h"
 
 static const string_s emsg[] = {
@@ -44,6 +45,8 @@ int err(enum ecode ecode) {
       write(STDERR_FILENO, emsg[ecode]._, emsg[ecode].size);
     }
   }
+
+  DB_FMT("[ !! ] err: bubbling up error %d", pecode);
 
   return (int) pecode;
 }

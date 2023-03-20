@@ -1,11 +1,14 @@
 #include <unistd.h>
 
 #define LOCK_POOL_DEF
-#define PROVIDE_SYMTAB_TABDEF
 
 #include "debug.h"
 #include "prim.h"  // also include `symtab.h'
-#include "cgen.h"
+
+#include "libcgen.h"
+
+// for `symtab.c':
+POOL_T* symtab = NULL;
 
 static const char* __cgen_sym_typ[] = {
   [__LISP_CLISP_FUN] = "__LISP_VAR_FUN",
@@ -195,7 +198,7 @@ static int __cgen_transpile_sym(struct lisp_symtab_pp* stab_pp) {
     }
   }
 
-  cgen_string(LINE("POOL_T symtab[SYMTAB_CELL] = {"));
+  cgen_string(LINE("static POOL_T __symtab_init[SYMTAB_CELL] = {"));
 
   FOR_EACH_TABENT(i, SYMTAB_CELL) {
     POOL_T* pp = stab_pp[i].mem;
@@ -205,7 +208,8 @@ static int __cgen_transpile_sym(struct lisp_symtab_pp* stab_pp) {
     }
   }
 
-  cgen_string("};\n");
+  cgen_string(LINE("};") \
+              LINE("POOL_T* symtab = __symtab_init;"));
 
   return ret;
 }
@@ -214,13 +218,10 @@ int main(void) {
   int ret = 0;
 
   __cgen_preamble();
-  symtab_init();
 
-  ret = __cgen_compile_prim(vsl_primtab);
-  assert(ret == 0, OR_ERR());
-
-  ret = __cgen_transpile_sym(symtab_pp);
-  assert(ret == 0, OR_ERR());
+  MAYBE_INIT(symtab_init(true));
+  MAYBE_INIT(__cgen_compile_prim(vsl_primtab));
+  MAYBE_INIT(__cgen_transpile_sym(symtab_pp));
 
   cgen_flush();
 

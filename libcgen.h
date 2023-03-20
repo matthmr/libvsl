@@ -1,5 +1,5 @@
-#ifndef LOCK_CGEN
-#  define LOCK_CGEN
+#ifndef LOCK_LIBCGEN
+#  define LOCK_LIBCGEN
 
 #  define PROVIDE_INC_STRING
 #  define LOCK_ERR_UTILS

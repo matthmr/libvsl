@@ -13,5 +13,5 @@ library_gen
 
 library(`libcgen.a')
 library_obj(
-`cgen.o')
+`libcgen.o')
 library_gen

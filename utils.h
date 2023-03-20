@@ -68,6 +68,18 @@
   (x) = (y);                \
   defer()
 
+// defer statement, with the value of `x', executing `y'
+#  define defer_as_exec(x,y) \
+  ret = (x);                 \
+  (y);                       \
+  defer()
+
+// defer statement, with the value of `y', for `x', executing `z'
+#  define defer_for_as_exec(x,y,z) \
+  (x) = (y);                       \
+  (z);                             \
+  defer()
+
 ////////////////////////////////////////////////////////////
 
 // conditional defer statement
@@ -92,8 +104,7 @@
 // conditional defer statement, with return set to `y', executing `z'
 #  define defer_if_as_exec(x,y,z) \
   if (x) {                        \
-    z;                            \
-    defer_as(y);                  \
+    defer_as_exec((y), (z));      \
   }
 
 // conditional defer statement, with the value of `z' set to `y'
@@ -105,8 +116,7 @@
 // conditional defer statement, with the value of `z' set to `y', executing `w'
 #  define defer_if_for_as_exec(x,y,z,w) \
   if (x) {                              \
-    w;                                  \
-    defer_for_as((z), (y));             \
+    defer_for_as_exec((z), (y), (w));   \
   }
 
 ////////////////////////////////////////////////////////////
@@ -156,7 +166,10 @@
 #  define IDX_HM(x) \
   ((x) - 1)
 
-typedef unsigned char  bool, uchar;
+#  define MAYBE_INIT(x) \
+  assert((x) == 0, OR_ERR());
+
+typedef unsigned char  bool, byte, uchar;
 typedef unsigned short ushort;
 typedef unsigned int   uint;
 typedef unsigned long  ulong;
