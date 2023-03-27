@@ -3,7 +3,7 @@
 #define LOCK_POOL_DEF
 
 #include "debug.h"
-#include "prim.h"  // also include `symtab.h'
+#include "prim.h" // also includes `lisp.h'
 
 #include "libcgen.h"
 
@@ -11,14 +11,14 @@
 POOL_T* symtab = NULL;
 
 static const char* __cgen_sym_typ[] = {
-  [__LISP_CLISP_FUN] = "__LISP_VAR_FUN",
-  [__LISP_CLISP_SYM] = "__LISP_VAR_SYM",
+  [__LISP_CLISP_FUN] = "__LISP_TYP_FUN",
+  [__LISP_CLISP_SYM] = "__LISP_TYP_SYM",
 };
 
 static void __cgen_preamble(void) {
   cgen_notice();
   cgen_string(
-    LINE("#define EXTERN_PRIM_FUNC") \
+    LINE("#define EXTERN_PRIM_FUNC")    \
     LINE("#include \"prim.h\"")         \
     LINE(""));
 }

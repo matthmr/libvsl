@@ -75,18 +75,18 @@ int ferr(enum fecode fecode) {
 ////////////////////////////////////////////////////////////////////////////////
 
 CLISP_PRIM() {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> ()");
 
-  ret.master.typ = __LISP_VAR_SYM;
+  ret.master.typ = __LISP_TYP_SYM;
   ret.master.mem.sym = argp[0].mem.sym;
 
   return ret;
 }
 
 CLISP_PRIM(set) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_set()");
 
@@ -94,7 +94,7 @@ CLISP_PRIM(set) {
 }
 
 CLISP_PRIM(fun) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_fun()");
 
@@ -102,7 +102,7 @@ CLISP_PRIM(fun) {
 }
 
 CLISP_PRIM(lam) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_lam()");
 
@@ -110,7 +110,7 @@ CLISP_PRIM(lam) {
 }
 
 CLISP_PRIM(eval) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_eval()");
 
@@ -118,7 +118,7 @@ CLISP_PRIM(eval) {
 }
 
 CLISP_PRIM(quot) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_quot()");
 
@@ -126,7 +126,7 @@ CLISP_PRIM(quot) {
 }
 
 CLISP_PRIM(if) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_if()");
 
@@ -134,7 +134,7 @@ CLISP_PRIM(if) {
 }
 
 CLISP_PRIM(eq) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_eq()");
 
@@ -142,7 +142,7 @@ CLISP_PRIM(eq) {
 }
 
 CLISP_PRIM(not) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_not()");
 
@@ -150,7 +150,7 @@ CLISP_PRIM(not) {
 }
 
 CLISP_PRIM(block) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_block()");
 
@@ -158,7 +158,7 @@ CLISP_PRIM(block) {
 }
 
 CLISP_PRIM(while) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_while()");
 
@@ -166,7 +166,7 @@ CLISP_PRIM(while) {
 }
 
 CLISP_PRIM(break) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_break()");
 
@@ -174,7 +174,7 @@ CLISP_PRIM(break) {
 }
 
 CLISP_PRIM(continue) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_continue()");
 
@@ -182,7 +182,7 @@ CLISP_PRIM(continue) {
 }
 
 CLISP_PRIM(return) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_return()");
 
@@ -190,7 +190,7 @@ CLISP_PRIM(return) {
 }
 
 CLISP_PRIM(goto) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_goto()");
 
@@ -198,7 +198,7 @@ CLISP_PRIM(goto) {
 }
 
 CLISP_PRIM(label) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_label()");
 
@@ -206,7 +206,7 @@ CLISP_PRIM(label) {
 }
 
 CLISP_PRIM(cond) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_cond()");
 
@@ -214,7 +214,7 @@ CLISP_PRIM(cond) {
 }
 
 CLISP_PRIM(parent) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_parent()");
 
@@ -222,7 +222,7 @@ CLISP_PRIM(parent) {
 }
 
 CLISP_PRIM(type) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_type()");
 
@@ -230,7 +230,7 @@ CLISP_PRIM(type) {
 }
 
 CLISP_PRIM(set_right_child) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_set_right_child()");
 
@@ -238,7 +238,7 @@ CLISP_PRIM(set_right_child) {
 }
 
 CLISP_PRIM(left_child) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_left_child()");
 
@@ -246,7 +246,7 @@ CLISP_PRIM(left_child) {
 }
 
 CLISP_PRIM(set_parent) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_set_parent()");
 
@@ -254,7 +254,7 @@ CLISP_PRIM(set_parent) {
 }
 
 CLISP_PRIM(set_left_child) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_set_left_child()");
 
@@ -262,7 +262,7 @@ CLISP_PRIM(set_left_child) {
 }
 
 CLISP_PRIM(ref) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_ref()");
 
@@ -270,7 +270,7 @@ CLISP_PRIM(ref) {
 }
 
 CLISP_PRIM(right_child) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_right_child()");
 
@@ -278,7 +278,7 @@ CLISP_PRIM(right_child) {
 }
 
 CLISP_PRIM(del) {
-  struct lisp_fun_ret ret = {0};
+  struct lisp_ret ret = {0};
 
   DB_MSG(" -> lisp_prim_del()");
 

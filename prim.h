@@ -2,7 +2,8 @@
 #  define LOCK_PRIM
 
 #  define LOCK_POOL_DEF
-#  include "symtab.h" // also includes `utils.h`, `err.h'
+
+#  include "lisp.h" // also includes `symtab.h', `sexp.h'
 
 #  define CLISP_PRIM_FUN(__fun,_s0,_s1,_l0,_l1) \
   {                                             \
@@ -37,37 +38,8 @@ enum fecode {
 #define FECODE_BEGIN (FEOK)
 #define FECODE_END   (FEOK_END)
 
-enum lisp_fun_ret_t {
-  __LISP_FUN_MASK = -2,  /** stack the call to the function, waiting for more
-                             arguments */
-  __LISP_FUN_ERR  = -1u, /**  generic error */
-  __LISP_FUN_OK   = 0,
-};
-
-union lisp_fun_u {
-  struct lisp_sym*  sym;  /** @sym:  a symbol pointer; for (ref) and alike */
-  struct lisp_hash  hash; /** @hash: a hash; for most set/get quotes       */
-  struct lisp_sexp* sexp; /** @sexp: a sexp; for most general quotes       */
-  void*             gen;  /** @gen:  generic memory; casted by the caller  */
-};
-
-struct lisp_fun_arg {
-  union lisp_fun_u  mem;
-  enum lisp_sym_typ typ;
-};
-
-// f(x) = y -> master := y, slave := err
-struct lisp_fun_ret {
-  struct lisp_fun_arg master;
-  enum lisp_fun_ret_t slave;
-};
-
-// TODO: like LIBC, take `ENV' as the environment (scope) for the function
-typedef struct lisp_fun_ret
-(*lisp_fun) (struct lisp_fun_arg* argp, uint argv);
-
 #  define CLISP_PRIM(name) \
-  struct lisp_fun_ret lisp_prim_##name(struct lisp_fun_arg* argp, uint argv)
+  struct lisp_ret lisp_prim_##name(struct lisp_arg* argp, uint argv)
 
 #  ifdef EXTERN_PRIM_FUNC
 CLISP_PRIM();

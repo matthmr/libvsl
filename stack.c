@@ -32,32 +32,32 @@ void lisp_stack_sexp_pop(struct lisp_stack* stack, POOL_T* mpp,
 ////////////////////////////////////////////////////////////////////////////////
 
 // TODO: stub
-static void lisp_stack_lex_frame_var(struct lisp_fun_arg* const restrict reg,
+static void lisp_stack_lex_frame_var(struct lisp_arg* const restrict reg,
                                      const struct lisp_sym* const sym) {
 
   switch (sym->typ) {
-  case __LISP_VAR_SYM:
+  case __LISP_TYP_SYM:
     break;
-  case __LISP_VAR_SEXP:
+  case __LISP_TYP_SEXP:
     break;
   }
 }
 
 static inline void
-lisp_stack_lex_frame_pop(struct lisp_fun_arg* const restrict reg,
-                         const struct lisp_fun_arg pop) {
+lisp_stack_lex_frame_pop(struct lisp_arg* const restrict reg,
+                         const struct lisp_arg pop) {
 
   switch (pop.typ) {
-  case __LISP_VAR_GEN:
+  case __LISP_TYP_GEN:
     reg->mem.gen  = pop.mem.gen;
     break;
-  case __LISP_VAR_SYM:
+  case __LISP_TYP_SYM:
     reg->mem.sym  = pop.mem.sym;
     break;
-  case __LISP_VAR_HASH:
+  case __LISP_TYP_HASH:
     reg->mem.hash = pop.mem.hash;
     break;
-  case __LISP_VAR_SEXP:
+  case __LISP_TYP_SEXP:
     reg->mem.sexp = pop.mem.sexp;
     break;
   }
@@ -65,11 +65,11 @@ lisp_stack_lex_frame_pop(struct lisp_fun_arg* const restrict reg,
 
 
 // TODO: refactor the expression yielding to its own function
-struct lisp_fun_ret lisp_stack_lex_frame(struct lisp_stack* f_stack) {
+struct lisp_ret lisp_stack_lex_frame(struct lisp_stack* f_stack) {
   int ret = 0;
 
   enum lisp_stack_ev ev    = {0};
-  struct lisp_fun_arg* reg = NULL;
+  struct lisp_arg* reg     = NULL;
   struct lisp_stack* stack = NULL;
   struct lisp_frame frame  = {0};
 
@@ -82,7 +82,7 @@ struct lisp_fun_ret lisp_stack_lex_frame(struct lisp_stack* f_stack) {
   stack       = &frame.stack;
   frame.reg.i = 0;
 
-  assert(frame.sym.p.master->typ == __LISP_VAR_FUN &&
+  assert(frame.sym.p.master->typ == __LISP_TYP_FUN &&
          frame.sym.p.master->dat != NULL,
          err(EISNOTFUNC));
 
@@ -93,11 +93,11 @@ struct lisp_fun_ret lisp_stack_lex_frame(struct lisp_stack* f_stack) {
 
   // TODO: this could be heap-allocated
   {
-    struct lisp_fun_arg argp[f_argv];
+    struct lisp_arg argp[f_argv];
     reg = frame.reg._ = argp;
   }
 
-  reg->typ     = __LISP_VAR_SYM;
+  reg->typ     = __LISP_TYP_SYM;
   reg->mem.sym = frame.sym.p.master;
   ++reg;
 
@@ -155,12 +155,12 @@ yield:
       if (stack->typ.lex.lit_expr) {
         stack->typ.lex.lit_expr = false;
         reg->mem.sexp = stack->typ.lex.mem.sexp;
-        reg->typ      = __LISP_VAR_SEXP;
+        reg->typ      = __LISP_TYP_SEXP;
       }
       else {
         frame.stack.ev &= ~__STACK_PUSHED_VAR;
         reg->mem.hash   = stack->typ.lex.mem.hash;
-        reg->typ        = __LISP_VAR_HASH;
+        reg->typ        = __LISP_TYP_HASH;
       }
 
       ++reg, ++frame.reg.i;
@@ -246,7 +246,7 @@ yield:
     }
     else {
       frame.pop = lisp_stack_lex_frame(stack);
-      assert(frame.pop.slave == __LISP_FUN_OK, OR_ERR());
+      assert(frame.pop.slave == __LISP_OK, OR_ERR());
 
       lisp_stack_lex_frame_pop(reg, frame.pop.master);
       ++reg, ++frame.reg.i;

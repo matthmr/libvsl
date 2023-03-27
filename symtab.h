@@ -63,16 +63,16 @@ enum lisp_sym_typ {
   __LISP_CLISP_SYM,
   __LISP_CLISP_FUN,
 
-  __LISP_VAR_GEN,
+  __LISP_TYP_GEN,
 
-  __LISP_VAR_SYM,
-  __LISP_VAR_SEXP,
-  __LISP_VAR_LEXP,
+  __LISP_TYP_SYM,
+  __LISP_TYP_SEXP,
+  __LISP_TYP_LEXP,
 
-  __LISP_VAR_SYMP,
-  __LISP_VAR_HASH,
+  __LISP_TYP_SYMP,
+  __LISP_TYP_HASH,
 
-  __LISP_VAR_FUN,
+  __LISP_TYP_FUN,
 };
 
 #  define INFINITY (-1u)

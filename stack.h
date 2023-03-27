@@ -7,7 +7,7 @@
 
 #  include "sexp.h" // also includes `symtab.h' (lock internals)
 #  include "pool.h" // also includes `err.h', `utils.h', `stdlib.h'
-#  include "prim.h" // also includes `symtab.h'
+#  include "lisp.h"
 
 struct lisp_stack;
 struct lisp_frame;
@@ -50,7 +50,7 @@ struct lisp_lex_stack {
   struct lisp_sexp* lazy;      /** @lazy:      the SEXP pointer for arguments
                                                over the lower limit; lazily
                                                evaluated        */
-  union lisp_fun_u  mem;       /** @mem:       the stack memory */
+  union lisp_u      mem;       /** @mem:       the stack memory */
   uint              paren;     /** @paren:     the paren level  */
   bool              lit_expr;  /** @lit_expr:  boolean switch for SEXPs:
                                                -> false: hash
@@ -60,29 +60,29 @@ struct lisp_lex_stack {
 
 struct lisp_sexp_stack {
   struct lisp_sexp* head; /** @head: the current sexp head   */
-  POOL_T*           mpp;  /** @mpp:  the current pool thread */
+  POOL_T*            mpp; /** @mpp:  the current pool thread */
 };
 
 union lisp_stack_typ {
   struct lisp_sexp_stack sexp; /** @sexp: SEXP stack; used for functions  */
-  struct lisp_lex_stack  lex;  /** @lex:  LEX stack; used for source code */
+  struct lisp_lex_stack   lex; /** @lex:  LEX stack; used for source code */
 };
 
 struct lisp_stack {
   union lisp_stack_typ typ; /** @typ:  the stack type (LEX|SEXP) */
-  enum lisp_stack_ev   ev;  /** @ev:   the stack event           */
+  enum lisp_stack_ev    ev; /** @ev:   the stack event           */
 };
 
 struct lisp_frame_reg {
-  struct lisp_fun_arg* _; /** @_: the argument register     */
-  uint i;                 /** @i: the current element index */
+  struct lisp_arg* _; /** @_: the argument register     */
+  uint i;             /** @i: the current element index */
 };
 
 struct lisp_frame {
   struct lisp_stack     stack; /** @stack: the current stack state       */
   struct lisp_symc_ret  sym;   /** @sym:   the current function          */
   struct lisp_frame_reg reg;   /** @reg:   the argument register         */
-  struct lisp_fun_ret   pop;   /** @pop:   the value from a function pop */
+  struct lisp_ret       pop;   /** @pop:   the value from a function pop */
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -121,6 +121,6 @@ void lisp_stack_sexp_pop(struct lisp_stack* stack,
 
 ////////////////////////////////////////////////////////////////////////////////
 
-struct lisp_fun_ret lisp_stack_lex_frame(struct lisp_stack* stack);
+struct lisp_ret lisp_stack_lex_frame(struct lisp_stack* stack);
 
 #endif
