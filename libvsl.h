@@ -23,7 +23,7 @@ extern Frontend frontend;
 
 #    define LOCK_POOL_DEF
 
-#    include "sexp.h" // also includes `symtab.h'
+#    include "prim.h" // also includes `lisp.h'
 #    include "lex.h"  // also includes `symtab.h', `stack.h'
 
 #  endif

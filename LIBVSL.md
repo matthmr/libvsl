@@ -1,23 +1,17 @@
-# LIBVSL / PREVSL
+# LIBVSL
 
-This documents the primitives built-in for the PREVSL implementation of LIBVSL
-as well as the applications of LIBVSL frontend implementations. PREVSL is the
-program you'll need to use to generate the grammar and symbol table for your
-LISP.
+This documents the primitives built-in for the turing complete implementation of
+LIBVSL as well as the applications of LIBVSL frontend implementations.
 
-## PREVSL primitives
+## LIBVSL primitives
 
 In the lists below, any `function:` is a symbol which when put as the first
 element of a list, will have a grammar form for its sibblings elements,
-returning a value. Any `symbol:` is a LISP symbol or a LISP primitive.
+returning an symbol or expression. Any `symbol:` is a LIBVSL primitive.
 
-PREVSL implements the following primitives:
+LIBVSL implements the following primitives:
 
-### Generic
-
-<!-- TODO: does `set' copy of reference memory? -->
-
-Those symbols are identical for all implementation of LIBVSL.
+<!-- TODO: does `set' *copy* or *reference* memory? -->
 
 - function: `set`
   - form: `(set <NAME> <EXPR>)`
@@ -313,53 +307,178 @@ Those symbols are identical for all implementation of LIBVSL.
 - symbol: `nil`
   - primitive false boolean
 
-### Grammar-defining
+## Implementating LIBVSL
 
-Those symbols are specific for defining a grammar with LIBVSL.
+To create a LISP using LIBVSL, you'll need *at least one* C source file,
+including the `libvsl.h` header with either of the macros `LIBVSL_FRONTEND` or
+`LIBVSL_FRONTEND_STUB` used at least once, and link it to `libvsl.a` with the
+`-lvsl` or equivalent compiler option set on your compiler of choice.
 
-- symbol: `start`
-  - externed as nil by default. This is a grammar for the first SEXP of a file
-    parsed by the language being defined
+If using a stub implementation of LIBVSL, you can use the
+`LIBVSL_FRONTEND_STUB` macro with no arguments, then compile it, as the `main`
+function is located in `libvsl.c`. You don't define the `main` entry point, just
+the `frontend` function that gets run in `main` before passing control to the
+lexer.
 
-- symbol: `end`
-  - externed as nil by default. This is a grammar for the last SEXP of a file
-    parsed by the language being defined
+### Stub implementation
 
-## Implementation syntax
+The stub implementation of LIBVSL is turing complete, so *in theory* you could
+just create a stub file and use it as a LISP. However it's too cumbersome and
+hard to use, as the only lexical elements defined in the lexer are '`(`' and
+'`)`' as expression delimiters, with no useful constructs like '`'`' for
+quoting. Nevertheless, you can pull the `dev` branch and run the following
+command:
 
-To create a LISP using PREVSL, you'll need *at least one* C source file.
-
-Then include the statement:
-
-```c
-LIBVSL_FRONTEND(<your-pvsl-frontend>);
+```shell
+$ git show dev:dev/sh/dev-on-branch.sh | sh -
 ```
 
-The `frontend` function will execute in `main` before `parse_bytstream` is
-called. If no such function exist, include the statement:
+This should create a `dev/` directory and inside of it, a `dev/sh/gen-lisp.sh`
+shell script. After configuring with `./configure`, you can run this script and
+it will use a file in `dev/c/lisp.c` as a LIBVSL stub to generate an executable,
+`./lisp`.
+
+### Frontend implementation
+
+However, if you want to build your own implementation either on top of `PRIMVSL`
+(LIBVSL's primitive, turing complete definitions) or substituting `PRIMVSL`,
+along with the instructions above, you'll have to:
+
+1. define one or more arrays of type `struct clisp_sym` using **only one** of
+   this macros:
+   1. `CLISP_PRIM_DECLFUN(name, function, lower_arg, upper_arg, lower_lit,
+      upper_lit)`: declare a LISP function
+     - `name`: name of the function as used in LISP code
+     - `function`: name of the function as used in C code
+     - `lower_arg`: lower bound of arguments for this function
+     - `upper_arg`: upper bound of arguments for this function
+     - `lower_lit`: lower bound of literal arguments for this function
+     - `upper_lit`: upper bound of literal arguments for this function
+     - end the definition with `CLISP_PRIM_DECLFUN_END()`
+   2. `CLISP_PRIM_DECLSYM(name, value)`: declare a LISP symbol
+     - `name`: name of the function as used in LISP code
+     - `value`: generic `void` pointer to the data of the symbol
+     - end the definition with `CLISP_PRIM_DECLSYM_END()`
+2. define your functions declared to be used in the `function` argument on
+   `CLISP_PRIM_DECLFUN` with the macro `CLISP_PRIM_DEFUN`. These functions are
+   of the type `struct lisp_ret (*) (struct mm_if argp, uint argv)`.
+3. define an *array iterator* with the type `struct clisp_tab` containing all
+   your arrays defined prior, with `CLISP_PRIM_DECLTAB_END` as the terminating
+   element.
+   - each array element should be wrapped arround the `CLISP_PRIM_DECLTAB`
+     macro, with the name of the element as the first argument, and the type of
+     the each element of the element array as the second argument.
+4. call the function `lisp_prim_setlocal` with a pointer to your array iterator
+   as the first argument, and a boolean as the second argument
+   - this boolean will decide if PRIMVSL should be included as well. Set it to
+     true if you want to implement your functions on top of PRIMVSL. Set if to
+     false if you want that your functions replace PRIMVSL.
+5. wrap the call to `lisp_prim_setlocal`, along with whatever else you want to
+   initialize, into a function with the type `int (*) (void)`, then pass the
+   name of this function to the macro `LIBVSL_FRONTEND`. Use this `int` return
+   value to signal that something inside your function has errored; as a error
+   code. It should be set to zero if everything has succeeded, non-zero
+   otherwise.
+
+**NOTE**: each array can only contain **one** type of these macros. So you can
+only have an array full of functions, or full of symbols, without mixing the
+two.
+
+#### LIBVSL functions
+
+All of LIBVSL's functions are of the type `struct lisp_ret (*) (struct mm_if
+argp, uint argv)`. To access arguments of `argp`, you'll use the `mm_mem`
+function. It is defined as:
 
 ```c
-LIBVSL_FRONTEND_STUB();
+struct mm_ret_if mm_mem(struct mm_if mm_if, const uint m_idx);
 ```
 
-### Header implementation
+You'll have to provide the current `mm` interface, `mm_if`, and the current
+index of `argp` you want to access. This function returns a wrapped interface of
+type `mm_ret_if`. It's recommended you define a variable with the same type in
+your function, and set it to the return of `mm_mem`. The `.master` field
+contains a (probably new) interface you'll have to set to `mm_if`, and the
+`.slave` field contains the memory you're indexing. `.slave` will be `NULL` if
+the memory indexing was **not** successful.
 
-You don't need to explictly include the `libvsl.h` file in your source
-implementation, as PREVSL will do that for you.
+It's recommended that you assert `mm_ret_if::slave` is **not** `NULL` before
+dealing with `mm_if` again, as this could prevent segmentation faults.
 
-### PREVSL implementation
+The memory that you'll want will be in the `.slave` field as a `void` pointer.
+As long as you assign it to another variable with a defined type (`int*`,
+`char*`, ...), you don't need to explictly cast it.
 
-You'll have to declare the name of the source file as the first symbolic
-argument to the `source` function. Even though VSL has no string literals,
-variable names are pretty laxed. As long as your source doesn't have whitespace
-or non-ASCII characters in it, it should be fine. Fore xample:
+A standard LIBVSL function might look like:
 
-```lisp
-(source my-vsl-implementation.c)
+```c
+CLISP_PRIM_DEFUN(foo) {
+    struct lisp_ret     ret = {0};
+    struct mm_ret_if ret_if = {0};
 
-(code)
-(more-code)
-...
+    for (uint i = 1; i < argv; ++i) {
+       // do something
+
+       ret_if = mm_mem(mm_if, i);
+       assert(ret_if.slave, OR_ERR());
+       mm_if = ret_if.master;
+       struct lisp_arg* arg = ret_if.slave;
+
+       // do something
+    }
+
+    return ret;
+}
+```
+
+#### Implementation example
+
+Here's an implementation that defines a LISP with a single function called
+`(hello-world)` that just prints "hello world".
+
+Source code (`myvsl.c`):
+
+```c
+#include "libvsl.h"
+
+#include <stdio.h>
+
+CLISP_PRIM_DEFUN(myvsl_hello_world) {
+    printf("hello world");
+    return (struct lisp_ret) {0};
+}
+
+static struct clisp_sym myvsl_prim_funtab[] = {
+    CLISP_PRIM_DECLFUN("hello-world", myvsl_hello_world, /* (hello-world) */
+                       0, 0, 0, 0),
+    CLISP_PRIM_DECLFUN_END(),
+};
+
+static struct clisp_tab iterarray[] = {
+    CLISP_PRIM_DECLTAB(myvsl_prim_funtab, __LISP_TYP_FUN),
+
+    CLISP_PRIM_DECLTAB_END(),
+};
+
+int myvsl_frontend(void) {
+    lisp_prim_setlocal(iterarray, false);
+    return 0;
+}
+
+LIBVSL_FRONTEND(myvsl_frontend);
+```
+
+Building:
+
+```sh
+$ make libvsl.a
+$ clang -I. -L. -lvsl myvsl.c -o myvsl
+$ ./myvsl
+(hello-world)
+hello world
+(something-thats-not-defined)
+[ !! ] libvsl: symtab: symbol was not found
+$
 ```
 
 ## LIBVSL limitations
@@ -371,15 +490,11 @@ By design, any frontend implementation of LIBVSL will have some limitations.
 The range of elements of a function that are to be automatically literals (i.e.
 lists that won't resolute) is static.
 
-For example, the function `fun` has LR set to 3, because:
+For example, the function `fun` has LR set to `[3, ∞)`, because:
 
 ```
 (fun <sym> <sym-list> <code...>)
- 1    2     3          4
+ 1    2     3          4   ...
 ```
 
-The third element, if being a list, is to be taken literally.
-
-### Static argument range
-
-The range of elements of a function is static.
+From the third element forward, the expressions are taken literally.

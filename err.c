@@ -7,6 +7,7 @@
 #include "err.h"
 
 static const string_s emsg[] = {
+  [EOK]             = ERR_STRING("libvsl", "EOK was sent"),
   [EIMBALANCED]     = ERR_STRING("libvsl: lexer", "imbalanced parens"),
   [EREAD]           = ERR_STRING("libvsl", "error while reading file"),
   [EFRONTEND]       = ERR_STRING("libvsl", "frontend error"),

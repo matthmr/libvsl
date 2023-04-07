@@ -1,19 +1,23 @@
 // libvsl: a vsl implementation; not bootstrapped
 
-// TODO: read from file as argument
-// TODO: a branch without `cgen' or `prim' (or with being them empty)
-
 #define LIBVSL_BACKEND
 
 #include "libvsl.h"
 
 int main(void) {
-  sexp_init();
-  symtab_init(false);
+  register int ret = 0;
 
-  if (frontend && frontend() != 0) {
-    return err(EFRONTEND);
+  sexp_init();
+  MAYBE_INIT(symtab_init(false));
+
+  if (frontend) {
+    ret = frontend();
+    assert(ret == 0, err(EFRONTEND));
   }
 
-  return parse_bytstream(STDIN_FILENO);
+  MAYBE_INIT(lisp_prim_init());
+
+  ret = parse_bytstream(STDIN_FILENO);
+
+  done_for(ret);
 }

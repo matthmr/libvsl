@@ -60,9 +60,6 @@ struct lisp_hash {
 enum lisp_sym_typ {
   __LISP_VAR_NO_TYPE = 0,
 
-  __LISP_CLISP_SYM,
-  __LISP_CLISP_FUN,
-
   __LISP_TYP_GEN,
 
   __LISP_TYP_SYM,
