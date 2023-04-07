@@ -14,8 +14,6 @@
 #  include "symtab.h" // also includes `utils.h`, `err.h'
 #  include "sexp.h"
 
-#  include "mm.h"
-
 enum lisp_ret_t {
   __LISP_ERR  = -1, /**  generic error */
   __LISP_OK   =  0,
