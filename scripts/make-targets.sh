@@ -4,7 +4,7 @@ case $1 in
   '-h'|'--help')
     echo -e \
 'Usage:       scripts/make-targets.sh
-Description: Makes the targets and CGENs
+Description: Makes the targets
 Variables:   M4=[m4-like command]
 Note:        Make sure to call this script from the repository root'
     exit 1
@@ -68,25 +68,5 @@ cat make/Targets.mk |\
   tr '\n' ' '       |\
   sed 's: $:\n:'    |\
   sed -e 's/^/TARGETS:=&/' >> make/Targets.mk
-
-echo '[ .. ] Generating CGEN targets'
-
-eval "$M4 $M4FLAGS make/Cgen.m4" > make/Cgen.mk
-
-echo "[ == ] cgen_src: cat make/Cgen.mk | sed >> make/Cgen.mk"
-cat make/Cgen.mk      |\
-  cut -d: -f1         |\
-  sed -n '/^.*\.c$/p' |\
-  tr '\n' ' '         |\
-  sed 's: $:\n:'      |\
-  sed 's/^/CGEN_SRC:=&/' >> make/Cgen.mk
-
-echo "[ == ] cgen_bin: cat make/Cgen.mk | sed >> make/Cgen.mk"
-cat make/Cgen.mk |\
-  cut -d: -f2-   |\
-  sed -n '/^ /p' |\
-  tr '\n' ' '    |\
-  sed 's: $:\n:' |\
-  sed 's/^/CGEN_BIN:=&/' >> make/Cgen.mk
 
 echo '[ OK ] scripts/make-targets.sh: Done'

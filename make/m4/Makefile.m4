@@ -17,11 +17,3 @@ define(`library', `define(`__library__', `$1')')dnl
 define(`library_obj', `define(`__library_objects__', `rec($@)')')dnl
 define(`library_gen', `dnl
 __library__: __library_objects__')dnl
-dnl
-define(`cgen_target', dnl
-`define(`__cgen_src__', $1)'dnl
-`define(`__cgen_prog__', $2)')dnl
-define(`cgen_gen', `dnl
-__cgen_src__: __cgen_prog__
-	@echo "CGEN __cgen_src__"
-	@./__cgen_prog__ > ./__cgen_src__ || exit 1')dnl

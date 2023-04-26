@@ -2,27 +2,22 @@
    Generic interface for LISP functions and for evaluation
  */
 
+// TODO: do we even need this? couldn't we just use symtab?
+
 #ifndef LOCK_LISP
 #  define LOCK_LISP
 
-#  ifdef PROVIDE_LISP_SEXP
-#    define LOCK_SYMTAB_INTERNALS
-#  else
-#    define LOCK_SEXP_INTERNALS
-#  endif
-
-#  include "symtab.h" // also includes `utils.h`, `err.h'
+#  include "symtab.h" // also includes `mm.h', `utils.h', `err.h'
 #  include "sexp.h"
 
-#  include "mm.h"
-
 enum lisp_ret_t {
-  __LISP_ERR  = -1, /**  generic error */
+  __LISP_ERR  = -1, /** generic error */
   __LISP_OK   =  0,
 };
 
 union lisp_u {
   struct lisp_sym*   sym; /** @sym:  a symbol pointer; for (ref) and alike */
+  struct lisp_sym   ssym; /** @ssym: a (static) symbol; for the stack      */
   struct lisp_hash  hash; /** @hash: a hash; for most set/get quotes       */
   struct lisp_sexp* sexp; /** @sexp: a sexp; for most general quotes       */
   void*              gen; /** @gen:  generic memory; casted by the caller  */

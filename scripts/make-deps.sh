@@ -34,10 +34,6 @@ $2 ~ /.*\/.*/ {
   print;
 }' > make/Deps.mk
 
-# Add Cgen as a dependency
-echo "[ == ] cat make/Cgen-obj.mk >> make/Deps.mk"
-cat make/Cgen-obj.mk >> make/Deps.mk
-
 # create the `OBJECTS' variable
 echo "[ == ] cat make/Deps.mk | sed >> make/Deps.mk"
 cat make/Deps.mk |\

@@ -1,8 +1,6 @@
 #ifndef LOCK_LEX
 #  define LOCK_LEX
 
-#  define LOCK_SYMTAB_INTERNALS
-
 #  include "symtab.h" // also includes `utils.h'
 #  include "stack.h"  // also includes `sexp.h'
 
@@ -35,47 +33,35 @@ enum lisp_lex_ev {
   __LISP_EV_SYMBOL_IN  = BIT(3),
 };
 
-#  define LEX_PAREN_IN(ev) \
-  ((ev) & __LISP_EV_PAREN_IN)
-
-#  define LEX_PAREN_OUT(ev) \
-  ((ev) & __LISP_EV_PAREN_OUT)
-
-#  define LEX_SYMBOL_OUT(ev) \
-  ((ev) & __LISP_EV_SYMBOL_OUT)
-
-#  define LEX_SYMBOL_IN(ev) \
-  ((ev) & __LISP_EV_SYMBOL_IN)
-
+#  define __LEX_TANGLE (__LISP_EV_PAREN_IN | __LISP_EV_PAREN_OUT)
+#  define LEX_TANGLE(ev)     ((ev) & __LEX_TANGLE)
+#  define LEX_PAREN_IN(ev)   ((ev) & __LISP_EV_PAREN_IN)
+#  define LEX_PAREN_OUT(ev)  ((ev) & __LISP_EV_PAREN_OUT)
+#  define LEX_SYMBOL_OUT(ev) ((ev) & __LISP_EV_SYMBOL_OUT)
+#  define LEX_SYMBOL_IN(ev)  ((ev) & __LISP_EV_SYMBOL_IN)
 
 enum lisp_lex_stat {
-  __LEX_NO_INPUT     = -2,
-  __LEX_DEFER        = -1,
-  __LEX_OK           =  0,
-};
-
-struct lisp_lex_ev_ret {
-  bool               master;
-  enum lisp_lex_stat slave;
-};
-
-
-struct lisp_lex_m {
-  enum lisp_lex_ev ev;     /** @ev:     the lex event                    */
-  uint             paren;  /** @paren:  the paren level                  */
-  uint             cb_idx; /** @cb_idx: the bytstream character index    */
-  uint             size;   /** @size:   the bytstream (significant) size */
-  struct lisp_hash hash;   /** @chash:  the symbol hash                  */
+  __LEX_NO_INPUT = -1,
+  __LEX_OK       =  0,
 };
 
 struct lisp_lex {
-  struct lisp_lex_m master;
-  int slave;
+  enum lisp_lex_ev   ev; /** @ev:     the lex event                    */
+  uint            paren; /** @paren:  the paren level                  */
+  uint           cb_idx; /** @cb_idx: the bytstream character index    */
+  uint             size; /** @size:   the bytstream (significant) size */
+  struct lisp_hash hash; /** @chash:  the symbol hash                  */
+};
+
+/** UNUSED */
+struct lisp_lex_ret {
+  struct lisp_lex   master;
+  enum lisp_lex_stat slave;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 
-int parse_bytstream(int fd);
-int lisp_lex_bytstream(struct lisp_stack* stack);
+int lisp_parser(int fd);
+int lisp_lex_yield(struct lisp_stack* stack);
 
 #endif
