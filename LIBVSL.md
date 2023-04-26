@@ -5,13 +5,15 @@ LIBVSL as well as the applications of LIBVSL frontend implementations.
 
 ## LIBVSL primitives
 
-In the lists below, any `function:` is a symbol which when put as the first
-element of a list, will have a grammar form for its sibblings elements,
-returning an symbol or expression. Any `symbol:` is a LIBVSL primitive.
-
-LIBVSL implements the following primitives:
+This repository includes a built-in, optional frontend called PRIMVSL (primitive
+VSL). PRIMVSL is a frontend implementation of LIBVSL that defines functions and
+symbols to be used by default. PRIMVSL can be excluded from LIBVSL if you want
+to build your own implementation. See the '_Implementating LIBVSL_' chapter for
+more info.
 
 <!-- TODO: does `set' *copy* or *reference* memory? -->
+
+### PRIMVSL functions
 
 - function: `set`
   - form: `(set <NAME> <EXPR>)`
@@ -300,6 +302,7 @@ LIBVSL implements the following primitives:
     (type nil) -> @sym
     (type (quot ())) -> @sexp
     ```
+### PRIMVSL symbols
 
 - symbol: `t`
   - primitive true boolean
@@ -340,9 +343,8 @@ it will use a file in `dev/c/lisp.c` as a LIBVSL stub to generate an executable,
 
 ### Frontend implementation
 
-However, if you want to build your own implementation either on top of `PRIMVSL`
-(LIBVSL's primitive, turing complete definitions) or substituting `PRIMVSL`,
-along with the instructions above, you'll have to:
+However, if you want to build your own implementation either on top of PRIMVSL
+or substituting PRIMVSL, along with the instructions above, you'll have to:
 
 1. define one or more arrays of type `struct clisp_sym` using **only one** of
    this macros:
@@ -386,44 +388,21 @@ two.
 
 #### LIBVSL functions
 
-All of LIBVSL's functions are of the type `struct lisp_ret (*) (struct mm_if
-argp, uint argv)`. To access arguments of `argp`, you'll use the `mm_mem`
-function. It is defined as:
+All of LIBVSL's functions are of the type `struct lisp_ret (*) (struct lisp_arg*
+argp, uint argv)`. Functions are declared and defined with the
+`CLISP_PRIM_DEFUN` CPP macro. Like `libc`'s `main`, the name of the function is
+passed as the first argument of the function, `argp[0]`. If you want to access
+its arguments, they start at `argp[1]`.
 
-```c
-struct mm_ret_if mm_mem(struct mm_if mm_if, const uint m_idx);
-```
-
-You'll have to provide the current `mm` interface, `mm_if`, and the current
-index of `argp` you want to access. This function returns a wrapped interface of
-type `mm_ret_if`. It's recommended you define a variable with the same type in
-your function, and set it to the return of `mm_mem`. The `.master` field
-contains a (probably new) interface you'll have to set to `mm_if`, and the
-`.slave` field contains the memory you're indexing. `.slave` will be `NULL` if
-the memory indexing was **not** successful.
-
-It's recommended that you assert `mm_ret_if::slave` is **not** `NULL` before
-dealing with `mm_if` again, as this could prevent segmentation faults.
-
-The memory that you'll want will be in the `.slave` field as a `void` pointer.
-As long as you assign it to another variable with a defined type (`int*`,
-`char*`, ...), you don't need to explictly cast it.
+<!-- TODO: lazy evaluation -->
 
 A standard LIBVSL function might look like:
 
 ```c
 CLISP_PRIM_DEFUN(foo) {
-    struct lisp_ret     ret = {0};
-    struct mm_ret_if ret_if = {0};
+    struct lisp_ret ret = {0};
 
     for (uint i = 1; i < argv; ++i) {
-       // do something
-
-       ret_if = mm_mem(mm_if, i);
-       assert(ret_if.slave, OR_ERR());
-       mm_if = ret_if.master;
-       struct lisp_arg* arg = ret_if.slave;
-
        // do something
     }
 
@@ -498,3 +477,15 @@ For example, the function `fun` has LR set to `[3, ∞)`, because:
 ```
 
 From the third element forward, the expressions are taken literally.
+
+### No string/integer literal
+
+This is a **purely symbolic** LISP. That means the only elements of the language
+you can define are symbols and expressions. As mentioned in the '_README_', this
+was made with the intent of being the stage 0 of bootstrapping of another LISP,
+so it had to be _as small as we can make it_.
+
+You can still _use_ string/integer literals, but you can't _define_ them in a
+program written with LIBVSL yourself.
+
+For this reason, no mathematical operation made it into PRIMVSL.

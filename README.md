@@ -1,4 +1,4 @@
-# vsl - very small/simple lisp
+# vsl - Very Small/Simple Lisp
 
 A very small implementation of LISP, nothing too fancy.
 
@@ -24,8 +24,9 @@ See the LIBVSL's [documentation](./LIBVSL.md) to get a quick manual on how to
 make a LISP with LIBVSL.
 
 *NOTE*: while this library *is* able to implement a LISP with `PRIMVSL`, defined
-        in `prim.c`, it is best suited as a *base* to implement your own LISP on
-        top of some primitives defined for turing completion (set, if, etc).
+        in `prim_defun.c`, it is best suited as a *base* to implement your own
+        LISP on top of some primitives defined for turing completion (`set`,
+        `if`, etc).
 
 # License
 
