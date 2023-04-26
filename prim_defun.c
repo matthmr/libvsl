@@ -1,222 +1,227 @@
+// PRIMVSL: a primitive implementation of LIBVSL
+
 #include "debug.h"
 #include "prim.h"  // also includes `symtab.h'
 #include "err.h"   // also includes `utils.h'
 
 CLISP_PRIM_DEFUN(emptyisnil) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_emptyisnil()");
+  DB_MSG("  -> primvsl: lisp_prim_emptyisnil()");
 
-  ret.master.mem.sym = &libvsl_prim_symtab[__CLISP_PRIM_SYM_NIL].sym;
-  ret.master.typ     = __LISP_TYP_SYM;
+  ret_t.master.mem.sym = &libvsl_prim_symtab[__CLISP_PRIM_SYM_NIL].sym;
+  ret_t.master.typ     = __LISP_TYP_SYM;
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(set) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_set()");
+  DB_MSG("  -> primvsl: lisp_prim_set()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(fun) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_fun()");
+  DB_MSG("  -> primvsl: lisp_prim_fun()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(lam) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_lam()");
+  DB_MSG("  -> primvsl: lisp_prim_lam()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(eval) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_eval()");
+  DB_MSG("  -> primvsl: lisp_prim_eval()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(quot) {
-  struct lisp_ret ret = {0};
+  register int ret      = __LISP_OK;
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_quot()");
+  DB_MSG("  -> primvsl: lisp_prim_quot()");
 
-  return ret;
+  ret_t.master = argp[1];
+
+  return ret_t.slave = ret, ret_t;
 }
 
 CLISP_PRIM_DEFUN(if) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_if()");
+  DB_MSG("  -> primvsl: lisp_prim_if()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(eq) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_eq()");
+  DB_MSG("  -> primvsl: lisp_prim_eq()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(not) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_not()");
+  DB_MSG("  -> primvsl: lisp_prim_not()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(block) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_block()");
+  DB_MSG("  -> primvsl: lisp_prim_block()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(while) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_while()");
+  DB_MSG("  -> primvsl: lisp_prim_while()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(break) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_break()");
+  DB_MSG("  -> primvsl: lisp_prim_break()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(continue) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_continue()");
+  DB_MSG("  -> primvsl: lisp_prim_continue()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(return) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_return()");
+  DB_MSG("  -> primvsl: lisp_prim_return()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(goto) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_goto()");
+  DB_MSG("  -> primvsl: lisp_prim_goto()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(label) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_label()");
+  DB_MSG("  -> primvsl: lisp_prim_label()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(cond) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_cond()");
+  DB_MSG("  -> primvsl: lisp_prim_cond()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(parent) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_parent()");
+  DB_MSG("  -> primvsl: lisp_prim_parent()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(type) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_type()");
+  DB_MSG("  -> primvsl: lisp_prim_type()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(set_right_child) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_set_right_child()");
+  DB_MSG("  -> primvsl: lisp_prim_set_right_child()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(left_child) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_left_child()");
+  DB_MSG("  -> primvsl: lisp_prim_left_child()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(set_parent) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_set_parent()");
+  DB_MSG("  -> primvsl: lisp_prim_set_parent()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(set_left_child) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_set_left_child()");
+  DB_MSG("  -> primvsl: lisp_prim_set_left_child()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(ref) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_ref()");
+  DB_MSG("  -> primvsl: lisp_prim_ref()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(right_child) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_right_child()");
+  DB_MSG("  -> primvsl: lisp_prim_right_child()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(del) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_del()");
+  DB_MSG("  -> primvsl: lisp_prim_del()");
 
-  return ret;
+  return ret_t;
 }
 
 CLISP_PRIM_DEFUN(lexp) {
-  struct lisp_ret ret = {0};
+  struct lisp_ret ret_t = {0};
 
-  DB_MSG("  -> CALLING: lisp_prim_lexp()");
+  DB_MSG("  -> primvsl: lisp_prim_lexp()");
 
-  return ret;
+  return ret_t;
 }

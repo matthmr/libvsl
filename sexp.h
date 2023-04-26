@@ -1,121 +1,90 @@
 #ifndef LOCK_SEXP
 #  define LOCK_SEXP
 
-#  ifndef SEXPPOOL
-#    define SEXPPOOL (64)
-#  endif
-
-#  define LOCK_SYMTAB_INTERNALS
-
 #  include "symtab.h"
+#  include "lisp.h"
 
-enum sexp_t {
-  __SEXP_SELF_ROOT   = BIT(0),
+/**
+   For SEXPs and LEXPs, right shift pushes from left to right, left shift pushes
+   from from right to left
 
-  __SEXP_SELF_SEXP   = BIT(1),
-  __SEXP_LEFT_SEXP   = BIT(2),
-  __SEXP_RIGHT_SEXP  = BIT(3),
+   e.g. __SEXP_LEFT_SEXP >> 1 = __SEXP_RIGHT_SEXP
+ */
+enum lisp_sexp_t {
+  __SEXP_SELF_ROOT  = BIT(0),
 
-  __SEXP_SELF_LEXP   = BIT(4),
-  __SEXP_LEFT_LEXP   = BIT(5),
-  __SEXP_RIGHT_LEXP  = BIT(6),
+  __SEXP_SELF_SEXP  = BIT(1),
+  __SEXP_LEFT_SEXP  = BIT(2),
+  __SEXP_RIGHT_SEXP = BIT(3),
 
-  __SEXP_LEFT_SYM    = BIT(7),
-  __SEXP_RIGHT_SYM   = BIT(8),
+  __SEXP_SELF_LEXP  = BIT(4),
+  __SEXP_LEFT_LEXP  = BIT(5),
+  __SEXP_RIGHT_LEXP = BIT(6),
+
+  __SEXP_LEFT_SYM   = BIT(7),
+  __SEXP_RIGHT_SYM  = BIT(8),
 };
 
-// used for `get_pos'
-#  define __RIGHT_CHILD \
-  (__SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)
+#  define __RIGHT_EXPR (__SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)
+#  define __LEFT_EXPR  (__SEXP_LEFT_SEXP  | __SEXP_LEFT_LEXP)
+#  define __RIGHT      (__SEXP_RIGHT_SYM  | __RIGHT_EXPR)
+#  define __LEFT       (__SEXP_LEFT_SYM   | __LEFT_EXPR)
+#  define __ROOT       (__SEXP_SELF_ROOT)
 
-#  define __LEFT_CHILD  \
-  (__SEXP_LEFT_SEXP  | __SEXP_LEFT_LEXP)
+#  define RIGHT_SYM(x)  ((x) & __SEXP_RIGHT_SYM)
+#  define LEFT_SYM(x)   ((x) & __SEXP_LEFT_SYM)
+#  define RIGHT_EXPR(x) ((x) & __RIGHT_EXPR)
+#  define LEFT_EXPR(x)  ((x) & __LEFT_EXPR)
+#  define IS_ROOT(x)    ((x) & __ROOT)
+#  define IS_SEXP(x)    ((x) & __SEXP_SELF_SEXP)
+#  define IS_LEXP(x)    ((x) & __SEXP_SELF_LEXP)
+#  define IS_EXPR(x)    (IS_SEXP(x) || IS_LEXP(x))
 
-#  define __ROOT        \
-  (__SEXP_SELF_ROOT)
+#  define RIGHT(x) ((x) & __RIGHT) // symbol or expr
+#  define LEFT(x)  ((x) & __LEFT)  // symbol or expr
 
-#  define __CHILD \
-  (__RIGHT_CHILD | __LEFT_CHILD)
+#  define SWAP_RL(x) (((x) & __RIGHT_EXPR) >> 1)
 
-#  define RIGHT_CHILD(x) ((x) & (__SEXP_RIGHT_SYM | __RIGHT_CHILD))
-#  define LEFT_CHILD(x)  ((x) & (__SEXP_LEFT_SYM  | __LEFT_CHILD))
-#  define IS_ROOT(x)     ((x) & __ROOT)
-#  define IS_LEXP(x)     ((x) & __SEXP_SELF_LEXP)
+struct lisp_sexp;
 
-#  define RIGHT_CHILD_EXPR(x) \
-  ((x) & (__RIGHT_CHILD))
-
-#  define LEFT_CHILD_EXPR(x) \
-  ((x) & (__LEFT_CHILD))
-
-struct pos_t {
-  uint pidx; /** @pidx: offset for the appropriate type; relative to the base
-                        of a pool section                   */
-  uint cidx; /** @cidx: index of the pool section;
-                        mirrored by `pool.h:MEMPOOL::c_idx' */
-};
-
-// TODO: add `struct lisp_sym` as a type
-union node_t {
-  struct lisp_hash sym;
-  struct pos_t     pos;
+union lisp_node_t {
+  struct lisp_hash  sym;
+  struct lisp_sexp* exp;
 };
 
 struct lisp_sexp {
-  struct pos_t self, root;
-  union node_t left, right;
-
-  /**
-        SEXP
-        ----
-        (a (b c)) ->     .
-                        / \
-                       a   .
-                          / \
-                         b   c
-        LEXP
-        ----
-        (a b c) ->       .
-                        / \
-                       a   ,
-                          / \
-                         b   c
-  */
-  enum sexp_t  t;
+  struct lisp_sexp* root;
+  union lisp_node_t left, right;
+  enum lisp_sexp_t  t;
 };
 
-void sexp_init(void);
+// NOTE: this assumes a stack exists
+enum lisp_trans_t {
+  __TRANS_ERR           = -1,     /** generic error   */
+  __TRANS_OK            = 0,      /** generic success */
 
-#endif
+  __TRANS_LEFT_EXPR     = BIT(0), /** always SEXP */
+  __TRANS_RIGHT_EXPR    = BIT(1),
+  __TRANS_LEXP          = BIT(2), /** always on the right */
+  __TRANS_LEFT_SYM      = BIT(3),
+  __TRANS_RIGHT_SYM     = BIT(4),
+  __TRANS_REBOUND_LEFT  = BIT(5),
+  __TRANS_REBOUND_RIGHT = BIT(6),
+  __TRANS_DONE          = BIT(7),
+};
 
-#ifndef LOCK_SEXP_FUNC
-#  define LOCK_SEXP_FUNC
+struct lisp_trans {
+  struct lisp_sexp*  exp;
+  enum lisp_trans_t stat;
+};
 
-#  define RIGHT (__SEXP_RIGHT_SYM | __SEXP_RIGHT_SEXP | __SEXP_RIGHT_LEXP)
-#  define SWAP_RL(x) (((x) & RIGHT) >> 1)
+////////////////////////////////////////////////////////////////////////////////
 
-#endif
-
-#ifndef LOCK_SEXP_INTERNALS
-#  define LOCK_SEXP_INTERNALS
-
-#  define POOL_ENTRY_T struct lisp_sexp
-#  define POOL_AM      SEXPPOOL
-
-#  ifdef LOCK_POOL
-#    undef LOCK_POOL
-#  endif
-
-#  include "pool.h"
-
-extern POOL_T** sexp_pp;
-
-void lisp_sexp_end(POOL_T** mpp);
-
-int  lisp_sexp_sym(POOL_T** mpp, struct lisp_hash hash);
-int  lisp_sexp_node_add(POOL_T** mpp);
-int  lisp_sexp_eval(POOL_T** mpp);
-
-struct lisp_sexp* lisp_sexp_get_head(void);
+struct lisp_trans lisp_sexp_yield(struct lisp_trans trans);
+struct lisp_sexp* lisp_sexp_node(struct lisp_sexp*  expr_head);
+struct lisp_sexp* lisp_sexp_sym(struct lisp_sexp*   expr_head,
+                                struct lisp_hash    sym_hash);
+struct lisp_sexp* lisp_sexp_end(struct lisp_sexp*   expr_head);
+void              lisp_sexp_clear(struct lisp_sexp* expr_head);
 
 #endif

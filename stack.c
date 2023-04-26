@@ -1,280 +1,582 @@
 #include "debug.h"
 #include "lex.h"   // also includes `stack.h'
+#include "err.h"
+#include "mm.h"
 
-// TODO: stub on the SEXP stack
+/**
+   Return the appropiate `argv' size for symbol @sym
+
+   The preceding 1 is for `argp[0]', and the `DISJOINT' macro returns 1 if the
+   function has disjoint arguments, which would mean that *at least one*
+   argument should store the lazy expressions from this disjunction
+
+   For example, if we have a function:
+
+       (function p1 p2 [p3 ...])
+
+   Then the argp layout is going to look like:
+
+       0: function
+       1: p1
+       2: p2
+       3: [p3 ...]
+
+    And this functions would return 4
+ */
+static inline uint __lisp_stack_argv(struct lisp_sym sym) {
+  return (1 + sym.size[0] + DISJOINT(sym.size));
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static int lisp_stack_sexp_frame_var(struct lisp_frame* frame) {
-  return 0;
+/**
+   LISP function eval stub. Every user-defined function calls this as their
+   `dat' field on their symbols
+ */
+// TODO: STUB
+struct lisp_ret lisp_eval_fun(struct lisp_arg* argp, uint argv) {
+  return (struct lisp_ret) {0};
 }
 
-static int lisp_stack_sexp_frame(struct lisp_stack* stack) {
-  return 0;
-}
+/**
+   Define a new stack frame from base stack @b_stack. Will yield from the SEXP
+   tree until a `pop_root' event is sent. Unlike `lisp_stack_lex_frame', the
+   objects we're going to parse already exist, and are already valid.
+ */
+// TODO: please refactor this shit into their own functions
+struct lisp_ret lisp_stack_sexp_frame(struct lisp_stack* b_stack) {
+  register int ret = 0;
 
+  struct lisp_frame          frame = {
+    .stack = (b_stack->ev &= ~__STACK_PUSH_FUN, *b_stack),
+    .sym   = {0},
+    .pop   = {0},
+    .argp  = NULL,
+    .argv  = 0,
+  };
+  struct lisp_arg            argp0 = {0};
 
-void lisp_stack_sexp_push(struct lisp_stack* stack, POOL_T* mpp,
-                          struct lisp_sexp* head) {
-  return;
-}
+  struct lisp_stack* const f_stack = &frame.stack;
+  struct lisp_trans           tret = {0};
+  register bool              empty = false;
 
-void lisp_stack_sexp_push_var(struct lisp_stack* stack, POOL_T* mpp,
-                              struct lisp_sexp* head, enum lisp_stack_ev ev) {
-  return;
-}
+  //// FRAME
 
-void lisp_stack_sexp_pop(struct lisp_stack* stack, POOL_T* mpp,
-                         struct lisp_sexp* head) {
-  return;
-}
+  DB_MSG("[ stack ] sexp: new frame");
 
-////////////////////////////////////////////////////////////////////////////////
+  frame.argp = &argp0;
 
-// TODO: stub
-static void lisp_stack_lex_frame_var(struct lisp_arg* const restrict reg,
-                                     const struct lisp_sym* const sym) {
+  DB_FMT("[ stack ] sexp: yielding for: argp[%d]", frame.argv);
 
-  switch (sym->typ) {
-  case __LISP_TYP_SYM:
-    break;
-  case __LISP_TYP_SEXP:
-    break;
-  }
-}
+  tret.exp  = f_stack->expr;
+  tret.stat = __TRANS_OK;
 
-static inline void
-lisp_stack_lex_frame_pop(struct lisp_arg* const restrict reg,
-                         const struct lisp_arg pop) {
+  // yield argp0
+  tret          = lisp_sexp_yield(tret);
+  f_stack->expr = tret.exp;
 
-  switch (pop.typ) {
-  case __LISP_TYP_GEN:
-    reg->mem.gen  = pop.mem.gen;
-    break;
-  case __LISP_TYP_SYM:
-    reg->mem.sym  = pop.mem.sym;
-    break;
-  case __LISP_TYP_HASH:
-    reg->mem.hash = pop.mem.hash;
-    break;
-  case __LISP_TYP_SEXP:
-    reg->mem.sexp = pop.mem.sexp;
-    break;
-  }
-}
+  // push expression: create a new frame, then pop from it
+  if (tret.stat & __TRANS_LEFT_EXPR) {
+    f_stack->expr = tret.exp;
+    frame.pop     = lisp_stack_sexp_frame(f_stack);
 
-
-// TODO: refactor the expression yielding to its own function
-struct lisp_ret lisp_stack_lex_frame(struct lisp_stack* f_stack) {
-  int ret = 0;
-
-  enum lisp_stack_ev ev    = {0};
-  struct lisp_arg* reg     = NULL;
-  struct lisp_stack* stack = NULL;
-  struct lisp_frame frame  = {0};
-
-  DB_MSG_SAFE("[ == ] stack(lex): push frame");
-
-  frame.sym.p = lisp_symtab_get(f_stack->typ.lex.mem.hash);
-  assert(frame.sym.p.slave == 0, OR_ERR());
-
-  frame.stack = *f_stack;
-  stack       = &frame.stack;
-  frame.reg.i = 0;
-
-  assert(frame.sym.p.master->typ == __LISP_TYP_FUN &&
-         frame.sym.p.master->dat != NULL,
-         err(EISNOTFUNC));
-
-  frame.sym.m = *frame.sym.p.master;
-
-  const uint f_argv = (1 + frame.sym.m.size[0] +
-                       (int) (frame.sym.m.size[0] != frame.sym.m.size[1]));
-
-  // TODO: this could be heap-allocated
-  {
-    struct lisp_arg argp[f_argv];
-    reg = frame.reg._ = argp;
+    assert(frame.pop.slave == __LISP_OK, OR_ERR());
+    assert(frame.pop.master.typ == __LISP_TYP_FUN ||
+           frame.pop.master.typ == __LISP_TYP_FUNP, err(EISNOTFUNC));
   }
 
-  reg->typ     = __LISP_TYP_SYM;
-  reg->mem.sym = frame.sym.p.master;
-  ++reg;
-
-  DB_FMT("[ == ] stack(lex): stack on argp[%d]", IDX_MH(frame.reg.i));
-
-  // called with pop event still set: it must've been `()'
-  if (STACK_POPPED(f_stack->ev)) {
-    DB_MSG_SAFE("[ == ] stack(lex): immediate pop");
-    goto pop;
+  // push symbol: symbol is function name
+  else if (tret.stat & __TRANS_LEFT_SYM) {
+    f_stack->hash = tret.exp->left.sym;
   }
 
-yield:
+  // nothing: () is nil
+  else {
+    empty = true;
 
-  // yield literal:
-  if ((frame.reg.i + 1) >= frame.sym.m.litr[0] &&
-      (frame.sym.m.litr[1] == INFINITY ||
-       (frame.reg.i + 1) <= frame.sym.m.litr[1])) {
-    frame.stack.ev |= __STACK_LIT;
+    f_stack->hash = (struct lisp_hash) {0};
+  }
 
-    DB_MSG_SAFE("[ == ] stack(lex): on literal");
+  DB_MSG("[ stack ] sexp: push variable");
 
-    ret = lisp_lex_bytstream(stack);
-    ev  = frame.stack.ev;
+  frame.argp->mem.sym = lisp_symtab_get(f_stack->hash);
 
-    assert(ret == __LEX_OK || ret == __LEX_DEFER, OR_ERR());
+  assert(frame.argp->mem.sym, OR_ERR());
+  assert(frame.argp->typ == __LISP_TYP_FUN  ||
+         frame.argp->typ == __LISP_TYP_FUNP, err(EISNOTFUNC));
 
-    // NOTE: `::lit_expr` *doesn't* trigger `PUSH_VAR`
-    if (STACK_PUSHED_VAR(ev) || stack->typ.lex.lit_expr) {
+  frame.sym = *frame.argp->mem.sym;
 
-      /** literal range is disjoint/infinite: save the memory a temporary SEXP
-          tree; lazily evaluated
-       */
-      if (frame.sym.m.litr[0] != 0 && frame.reg.i >= frame.sym.m.litr[0]) {
-        DB_MSG_SAFE("[ == ] stack(lex): stack push literal [masked]");
+  const uint s_argv = __lisp_stack_argv(frame.sym);
 
-        ret = lisp_sexp_node_add(sexp_pp);
-        assert(ret == 0, OR_ERR());
+  frame.argp = mm_alloc(sizeof(struct lisp_sym)*s_argv);
+  assert(frame.argp, OR_ERR());
 
-        if (!frame.stack.typ.lex.lazy) {
-          frame.stack.typ.lex.lazy = lisp_sexp_get_head();
+  frame.argp[0].mem.ssym = frame.sym;
+  frame.argp[0].typ      = __LISP_TYP_FUN;
+
+  ++frame.argv;
+
+  // argv = 0 -> () -> nil
+  if (empty) {
+    goto stack_done;
+  }
+
+  //// ARGP0
+
+  // argv > 0
+  for (;;) {
+    DB_FMT("[ stack ] sexp: yielding for: argp[%d]", frame.argv);
+
+    tret = lisp_sexp_yield(tret);
+
+    f_stack->expr = tret.exp;
+
+    if (tret.stat & (__TRANS_LEFT_SYM | __TRANS_RIGHT_SYM)) {
+      assert(frame.sym.size[1] == INFINITY ||
+             frame.argv <= frame.sym.size[1], err(EARGTOOBIG));
+
+      if (LITERAL(frame.argv, frame.sym.litr)) {
+        (frame.argp + frame.argv)->mem.hash = (tret.stat & __TRANS_LEFT_SYM)?
+                                                 tret.exp->left.sym:
+                                                 tret.exp->right.sym;
+        (frame.argp + frame.argv)->typ      = __LISP_TYP_HASH;
+      }
+      else {
+        register struct lisp_sym* vsym =
+          lisp_symtab_get((tret.stat & __TRANS_LEFT_SYM)?
+                            tret.exp->left.sym:
+                            tret.exp->right.sym);
+        assert(vsym, OR_ERR());
+
+        // cast `::dat' to its appropiate type
+        switch (vsym->typ) {
+        case __LISP_TYP_SYM:
+        case __LISP_TYP_SYMP:
+          (frame.argp + frame.argv)->mem.ssym = *(struct lisp_sym*) vsym->dat;
+          break;
+        case __LISP_TYP_SEXP:
+          (frame.argp + frame.argv)->mem.sexp = (struct lisp_sexp*) vsym->dat;
+          break;
+        default:
+          break;
         }
       }
 
-      DB_MSG_SAFE("[ == ] stack(lex): stack push literal");
-
-      if (frame.sym.m.litr[1] != INFINITY &&
-          (frame.reg.i + 1) > frame.sym.m.size[1]) {
-        defer_as(err(EARGTOOBIG));
-      }
-
-      if (frame.stack.typ.lex.lazy) {
-        goto yield;
-      }
-
-      if (stack->typ.lex.lit_expr) {
-        stack->typ.lex.lit_expr = false;
-        reg->mem.sexp = stack->typ.lex.mem.sexp;
-        reg->typ      = __LISP_TYP_SEXP;
-      }
-      else {
-        frame.stack.ev &= ~__STACK_PUSHED_VAR;
-        reg->mem.hash   = stack->typ.lex.mem.hash;
-        reg->typ        = __LISP_TYP_HASH;
-      }
-
-      ++reg, ++frame.reg.i;
+      ++frame.argv;
     }
 
-    if (STACK_POPPED(ev)) {
-      frame.stack.ev &= ~__STACK_LIT;
-      goto pop;
-    }
-
-    if (frame.sym.m.litr[1] != INFINITY &&
-        (frame.reg.i + 1) > frame.sym.m.litr[1]) {
-      frame.stack.ev &= ~__STACK_LIT;
-    }
-
-    goto yield;
-  }
-
-  // yield expression:
-
-  ret = lisp_lex_bytstream(stack);
-  assert(ret == __LEX_OK || ret == __LEX_DEFER, OR_ERR());
-
-  ev = frame.stack.ev;
-
-  // TODO: 'pop' the function with a mask, that way the function can keep
-  // calling itself and receiving the extra arguments
-
-  if (STACK_PUSHED_VAR(ev)) {
-    DB_FMT("[ == ] stack(lex): stack push variable argp[%d]", frame.reg.i);
-
-    frame.stack.ev &= ~__STACK_PUSHED_VAR;
-
-    if (frame.sym.m.size[1] != INFINITY &&
-        (frame.reg.i + 1) > frame.sym.m.size[1]) {
-      defer_as(err(EARGTOOBIG));
-    }
-
-    if ((frame.reg.i + 1) > frame.sym.m.size[0]) {
-      DB_MSG_SAFE("[ == ] stack(lex): stack push variable [masked]");
-
-      ret = lisp_sexp_sym(sexp_pp, frame.stack.typ.lex.mem.hash);
-      assert(ret == 0, OR_ERR());
-
-      if (!frame.stack.typ.lex.lazy) {
-        frame.stack.typ.lex.lazy = lisp_sexp_get_head();
-      }
-    }
-    else {
-      frame.sym.pv = lisp_symtab_get(frame.stack.typ.lex.mem.hash);
-      assert(frame.sym.pv.slave == 0, OR_ERR());
-
-      lisp_stack_lex_frame_var(reg, frame.sym.pv.master);
-      ++reg, ++frame.reg.i;
-    }
-
-    if (STACK_POPPED(ev)) {
-      goto pop;
-    }
-
-    goto yield;
-  }
-
-  else if (STACK_PUSHED_FUNC(ev)) {
-    DB_FMT("[ == ] stack(lex): stack push function argp[%d]", frame.reg.i);
-
-    frame.stack.ev &= ~__STACK_PUSHED_FUNC;
-
-    if (frame.sym.m.size[1] != INFINITY &&
-        (frame.reg.i + 1) > frame.sym.m.size[1]) {
-      defer_as(err(EARGTOOBIG));
-    }
-
-    if ((frame.reg.i + 1) > frame.sym.m.size[0]) {
-      DB_MSG_SAFE("[ == ] stack(lex): stack push function [masked]");
-
-      ret = lisp_sexp_node_add(sexp_pp);
-      assert(ret == 0, OR_ERR());
-
-      if (!frame.stack.typ.lex.lazy) {
-        frame.stack.typ.lex.lazy = lisp_sexp_get_head();
-      }
-    }
-    else {
-      frame.pop = lisp_stack_lex_frame(stack);
+    else if (tret.stat & (__TRANS_LEFT_EXPR | __TRANS_RIGHT_EXPR)) {
+      frame.pop = lisp_stack_sexp_frame(f_stack);
       assert(frame.pop.slave == __LISP_OK, OR_ERR());
-
-      lisp_stack_lex_frame_pop(reg, frame.pop.master);
-      ++reg, ++frame.reg.i;
     }
 
-    // undo the mask for `()'
-    if (STACK_POPPED(ev)) {
-      frame.stack.ev &= ~__STACK_POPPED;
+    else if (tret.stat & __TRANS_REBOUND_RIGHT) {
+stack_done:
+      assert(frame.argv >= frame.sym.size[0], err(EARGTOOSMALL));
+
+      frame.pop = LISP_FUN(frame.sym.dat) (frame.argp, frame.argv);
+      assert((int) frame.pop.slave == __LISP_OK, OR_ERR());
     }
-
-    goto yield;
-  }
-
-  else if (STACK_POPPED(ev)) {
-pop:
-    DB_MSG_SAFE("[ == ] stack(lex): stack pop frame");
-
-    frame.stack.ev &= ~__STACK_POPPED;
-
-    if (frame.reg.i < frame.sym.m.size[0]) {
-      defer_as(err(EARGTOOSMALL));
-    }
-
-    frame.pop = ((lisp_fun) frame.sym.m.dat) (frame.reg._, frame.reg.i);
-    ret       = frame.pop.slave;
-
-    DB_MSG_SAFE("[ == ] stack(lex): next");
   }
 
   done_for_with(frame.pop, frame.pop.slave = ret);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+/**
+   Pop the return value of a function into a stack variable's argument register
+ */
+static inline void
+lisp_stack_lex_frame_pop(struct lisp_frame* const framep) {
+  register struct lisp_arg* const c_argp = (framep->argp + framep->argv);
+
+  struct lisp_arg pop = framep->pop.master;
+
+  DB_FMT("[ stack ] lex: pop as argp[%d]", framep->argv);
+
+  switch (pop.typ) {
+  case __LISP_TYP_GEN:
+    c_argp->mem.gen  = pop.mem.gen;
+    break;
+  case __LISP_TYP_SYM:
+    c_argp->mem.ssym = pop.mem.ssym;
+    break;
+  case __LISP_TYP_SYMP:
+    c_argp->mem.sym  = pop.mem.sym;
+    break;
+  case __LISP_TYP_HASH:
+    c_argp->mem.hash = pop.mem.hash;
+    break;
+  case __LISP_TYP_SEXP:
+    c_argp->mem.sexp = pop.mem.sexp;
+    break;
+  default:
+    break;
+  }
+
+  ++framep->argv;
+}
+
+/**
+   Handle the `push_var' stack event
+ */
+static enum lisp_stack_stat
+lisp_stack_lex_frame_ev_pv(struct lisp_frame* const framep) {
+  register enum lisp_stack_stat ret = __STACK_OK;
+
+  struct lisp_stack* const stack = &framep->stack;
+  struct lisp_sym* const    symm = &framep->sym;
+  const enum lisp_stack_ev    ev = stack->ev;
+
+  const uint             c_argv = framep->argv;
+  struct lisp_arg* const c_argp = (framep->argp + c_argv);
+
+  struct lisp_sym*   vsym = NULL;
+
+  // quoted variable push
+  if (STACK_QUOT(ev)) {
+    DB_MSG("  -> push: literal");
+
+    if (stack->lit_paren && stack->paren >= stack->lit_paren) {
+      DB_MSG("  -> push: symbolic");
+
+      stack->expr = lisp_sexp_sym(stack->expr, stack->hash);
+      assert(stack->expr, OR_ERR());
+    }
+    else {
+      assert(symm->litr[1] == INFINITY || c_argv <= symm->litr[1],
+             err(EARGTOOBIG));
+
+      stack->ev        &= ~__STACK_QUOT;
+      c_argp->mem.hash  = stack->hash;
+      c_argp->typ       = __LISP_TYP_HASH;
+
+      ++framep->argv;
+    }
+
+    defer_as(__STACK_OK);
+  }
+
+  assert(symm->size[1] == INFINITY || c_argv <= symm->size[1],
+         err(EARGTOOBIG));
+
+  // lazy variable push
+  if (c_argv > symm->size[0]) {
+    DB_MSG("  -> push: lazy");
+
+    if (!stack->lazy) {
+      stack->lazy = lisp_sexp_node(stack->lazy);
+      assert(stack->lazy, OR_ERR());
+
+      ++framep->argv;
+    }
+
+    stack->lazy = lisp_sexp_sym(stack->lazy, stack->hash);
+    assert(stack->expr, OR_ERR());
+  }
+
+  else {
+    vsym = lisp_symtab_get(stack->hash);
+    assert(vsym, OR_ERR());
+
+    // cast `::dat' to its appropriate type
+    switch (vsym->typ) {
+    case __LISP_TYP_SYM:
+    case __LISP_TYP_SYMP:
+      c_argp->mem.ssym = *vsym;
+      break;
+    case __LISP_TYP_SEXP:
+      c_argp->mem.sexp = (struct lisp_sexp*) vsym->dat;
+      break;
+    default:
+      break;
+    }
+
+    ++framep->argv;
+  }
+
+  done_for(ret);
+}
+
+/**
+   Handle the `push_fun' stack event
+ */
+static enum lisp_stack_stat
+lisp_stack_lex_frame_ev_pf(struct lisp_frame* const framep) {
+  register enum lisp_stack_stat ret = __STACK_OK;
+
+  struct lisp_stack* const stack = &framep->stack;
+  struct lisp_sym* const    symm = &framep->sym;
+  const enum lisp_stack_ev    ev = stack->ev;
+
+  const uint             c_argv = framep->argv;
+
+  // quoted function push
+  if (STACK_QUOT(ev)) {
+    DB_MSG("  -> push: literal");
+
+    assert(symm->litr[1] == INFINITY || c_argv <= symm->litr[1],
+           err(EARGTOOBIG));
+
+    stack->expr = lisp_sexp_node(stack->expr);
+    assert(stack->expr, OR_ERR());
+
+    // since this is always called after top-level, and lit_paren is 0, this
+    // will never produce false negatives
+    if (stack->lit_paren < stack->paren) {
+      stack->lit_paren  = stack->paren;
+
+      // stack->ev        &= ~__STACK_QUOT;
+      // stack->expr       = NULL;
+      // ++framep->argv;
+    }
+    else {
+      DB_MSG("  -> push: symbolic");
+    }
+
+    defer_as(__STACK_OK);
+  }
+
+  assert(symm->size[1] == INFINITY || c_argv <= symm->size[1],
+         err(EARGTOOBIG));
+
+  // lazy function push
+  if (c_argv > symm->size[0]) {
+    DB_MSG("  -> push: lazy");
+
+    if (!stack->lazy) {
+      stack->lazy = lisp_sexp_node(stack->lazy);
+      assert(stack->lazy, OR_ERR());
+
+      ++framep->argv;
+    }
+
+    stack->lazy = lisp_sexp_node(stack->lazy);
+    assert(stack->lazy, OR_ERR());
+  }
+
+  else {
+    defer_as(__STACK_NEW);
+  }
+
+  done_for(ret);
+}
+
+/**
+   Handle the `pop' stack event
+ */
+static enum lisp_stack_stat
+lisp_stack_lex_frame_ev_pop(struct lisp_frame* const framep) {
+  register enum lisp_stack_stat ret = __STACK_OK;
+
+  struct lisp_stack* const stack = &framep->stack;
+  struct lisp_sym* const    symm = &framep->sym;
+  const enum lisp_stack_ev    ev = stack->ev;
+
+  const uint              c_argv = framep->argv;
+  struct lisp_arg* const  c_argp = (framep->argp + c_argv);
+
+  // quoted pop
+  if (STACK_QUOT(ev)) {
+    DB_MSG("  -> pop: literal");
+
+    stack->expr = lisp_sexp_end(stack->expr);
+
+    if (stack->lit_paren == (stack->paren + 1)) {
+      stack->lit_paren  = 0;
+      stack->ev        &= ~__STACK_QUOT;
+
+      c_argp->mem.sexp  = stack->expr;
+      c_argp->typ       = __LISP_TYP_SEXP;
+
+      ++framep->argv;
+    }
+    else {
+      // ignore
+      DB_MSG("  -> pop: symbolic");
+    }
+
+    defer_as(__STACK_OK);
+  }
+
+  // we preemptively increment the register index, even if there's no expr
+  assert((c_argv - 1) >= symm->size[0], err(EARGTOOSMALL));
+
+  // TODO: lazy pop
+  if (stack->lazy) {
+    DB_MSG("  -> pop: lazy");
+
+    stack->lazy = NULL;
+    defer_as(__STACK_DONE);
+  }
+
+  else {
+    defer_as(__STACK_DONE);
+  }
+
+  done_for(ret);
+}
+
+/**
+   Handle stack events yielded by the lexer
+ */
+static inline enum lisp_stack_stat
+lisp_stack_lex_frame_handle_ev(struct lisp_frame* const framep) {
+  const register enum lisp_stack_ev ev = framep->stack.ev;
+
+  if (STACK_PUSHED_VAR(ev)) {
+    DB_MSG("[ stack ] lex: push variable");
+
+    framep->stack.ev &= ~__STACK_PUSH_VAR;
+
+    return lisp_stack_lex_frame_ev_pv(framep);
+  }
+
+  else if (STACK_PUSHED_FUN(ev)) {
+    DB_MSG("[ stack ] lex: push function");
+
+    framep->stack.ev &= ~__STACK_PUSH_FUN;
+
+    return lisp_stack_lex_frame_ev_pf(framep);
+  }
+
+  else if (STACK_POPPED(ev)) {
+    DB_MSG("[ stack ] lex: pop frame");
+
+    framep->stack.ev &= ~__STACK_POP;
+
+    return lisp_stack_lex_frame_ev_pop(framep);
+  }
+
+  // appease the almighty compiler
+  return __STACK_OK;
+}
+
+//// STATIC
+
+/**
+   Define a new stack frame from base stack @b_stack. Will yield from the lexer
+   until a `pop' event is sent
+ */
+// TODO: which expressions are transient and which are to be saved in the symtab
+struct lisp_ret lisp_stack_lex_frame(struct lisp_stack* b_stack) {
+  register int ret = 0;
+
+  struct lisp_frame  frame = {
+    .stack = (b_stack->ev &= ~__STACK_PUSH_FUN, *b_stack),
+    .sym   = {0},
+    .pop   = {0},
+    .argp  = NULL,
+    .argv  = 0,
+  };
+
+  struct lisp_arg    argp0 = {0};
+
+  struct lisp_frame* framep = &frame;
+  struct lisp_stack* f_stack = &frame.stack;
+  register bool      empty = false;
+
+  //// FRAME
+
+  DB_MSG("[ stack ] lex: new frame");
+
+  frame.argp = &argp0;
+
+  DB_FMT("[ stack ] lex: yielding for: argp[%d]", frame.argv);
+
+  // yield argp0
+  ret = lisp_lex_yield(f_stack);
+  assert(ret == __LEX_OK, OR_ERR());
+
+  /** NOTE: this LISP allows for expressions like:
+
+      ((function a1 a2 ...) b1 b2 ...)
+
+      where `function' returns a symbol, which is a function itself
+  */
+  if (STACK_PUSHED_FUN(f_stack->ev)) {
+    frame.pop = lisp_stack_lex_frame(f_stack);
+
+    assert(frame.pop.slave == __LISP_OK, OR_ERR());
+    assert(frame.pop.master.typ == __LISP_TYP_FUN ||
+           frame.pop.master.typ == __LISP_TYP_FUNP, err(EISNOTFUNC));
+
+    f_stack->hash = frame.pop.master.mem.sym->hash;
+  }
+  else if (STACK_POPPED(f_stack->ev)) {
+    empty = true;
+
+    f_stack->hash = (struct lisp_hash) {0};
+  }
+
+  DB_MSG("[ stack ] lex: push variable");
+  f_stack->ev = 0;
+
+  frame.argp->mem.sym = lisp_symtab_get(f_stack->hash);
+  assert(frame.argp->mem.sym, OR_ERR());
+
+  frame.argp->typ     = frame.argp->mem.sym->typ;
+  assert(frame.argp->typ == __LISP_TYP_FUN  ||
+         frame.argp->typ == __LISP_TYP_FUNP, err(EISNOTFUNC));
+
+  frame.sym = *frame.argp->mem.sym;
+
+  const uint s_argv = __lisp_stack_argv(frame.sym);
+
+  frame.argp = mm_alloc(sizeof(struct lisp_sym)*s_argv);
+  assert(frame.argp, OR_ERR());
+
+  // argp0 is the frame symbol, just like in LIBC's `main'
+  frame.argp[0].mem.ssym = frame.sym;
+  frame.argp[0].typ      = __LISP_TYP_FUN;
+
+  ++frame.argv;
+
+  // argv == 0 -> nil
+  if (empty) {
+    goto stack_done;
+  }
+
+  //// ARGP0
+
+  // argv > 0
+  for (;;) {
+    DB_FMT("[ stack ] lex: yielding for: argp[%d]", frame.argv);
+
+    if (LITERAL(frame.argv, frame.sym.litr)) {
+      f_stack->ev |= __STACK_QUOT;
+    }
+
+    // yield expressions from the lexer
+    ret = lisp_lex_yield(f_stack);
+    assert(ret == __LEX_OK || ret == __LEX_NO_INPUT, OR_ERR());
+
+    ret = lisp_stack_lex_frame_handle_ev(framep);
+
+    switch (ret) {
+    case __STACK_NEW:
+      frame.pop = lisp_stack_lex_frame(f_stack);
+      assert(frame.pop.slave == __STACK_DONE, OR_ERR());
+      lisp_stack_lex_frame_pop(framep);
+      break;
+
+    case __STACK_DONE:
+stack_done:
+      frame.pop = LISP_FUN(frame.sym.dat) (frame.argp, frame.argv);
+      assert((int) frame.pop.slave == __LISP_OK, OR_ERR());
+
+      // TODO: this shouldn't free the whole thing
+      mm_free(frame.argp);
+      defer_as(__STACK_DONE);
+      break;
+
+    default:
+      assert(ret == __STACK_OK, OR_ERR());
+      break;
+    }
+  }
+
+  done_for_with(frame.pop, (frame.pop.slave = ret? ret: 0));
 }

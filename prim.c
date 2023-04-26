@@ -2,6 +2,8 @@
 #include "prim.h"  // also includes `symtab.h'
 #include "err.h"   // also includes `utils.h'
 
+#include <unistd.h>
+
 static const string_s femsg[] = {
   [FENOARGP0] = ERR_STRING("libvsl", "argp[0] couldn't be gotten"),
 };
@@ -109,23 +111,29 @@ void lisp_prim_setlocal(struct clisp_tab* local_itertab, bool keep) {
 }
 
 int lisp_prim_init(void) {
-  register int ret = 0;
+  register int       ret = 0;
+  struct lisp_sym* ret_t = NULL;
 
   struct clisp_tab* ctab = NULL;
   struct clisp_sym* csym = NULL;
 
-  assert(!libvsl_init_other && libvsl_keep_prim, 0);
+  if (!libvsl_init_other) {
+    assert(libvsl_keep_prim, 0);
+  }
+
+  // the user can also pass in `NULL' and expect us to not initialize
+  assert(libvsl_prim_itertab, 0);
 
   for (ctab = libvsl_prim_itertab; ctab->tab; ++ctab) {
     for (csym = ctab->tab; csym->str; ++csym) {
-      struct lisp_hash_ret sret = str_hash(csym->str);
+      struct lisp_hash_ret sret = hash_str(csym->str);
       assert(sret.slave == 0, OR_ERR());
 
       csym->sym.hash = sret.master;
       csym->sym.typ  = ctab->typ;
 
-      ret = lisp_symtab_set(csym->sym);
-      assert(ret == 0, OR_ERR());
+      ret_t = lisp_symtab_set(csym->sym);
+      assert(ret_t, OR_ERR());
     }
   }
 

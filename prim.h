@@ -3,19 +3,17 @@
 
 // TODO: a #define header that lets the user define their lisp without primvsl
 
-#  define LOCK_POOL_DEF
-
 #  include "lisp.h" // also includes `symtab.h', `sexp.h'
 
 #  define CLISP_PRIM_DECLFUN(__fun,__funname,_s0,_s1,_l0,_l1) \
-  {                             \
-    .str = __fun,               \
-    .sym = {                    \
-      .typ  = __LISP_TYP_FUN,   \
-      .dat  = __funname,        \
-      .size = {_s0, _s1},       \
-      .litr = {_l0, _l1},       \
-    },                          \
+  {                           \
+    .str = __fun,             \
+    .sym = {                  \
+      .typ  = __LISP_TYP_FUN, \
+      .dat  = __funname,      \
+      .size = {_s0, _s1},     \
+      .litr = {_l0, _l1},     \
+    },                        \
   }
 
 #  define CLISP_PRIM_DECLSYM(__sym,__val) \
@@ -39,9 +37,9 @@
 #  define CLISP_PRIM_DECLFUN_END() CLISP_PRIM_DECL_END()
 #  define CLISP_PRIM_DECLTAB_END() {.tab = NULL}
 
-/** as the entry on the original `clisp' tables are also modified, we can easily
-    address a symbol on the symbol table with just the index to the `clisp'
-    table, instead of the on-the-fly symbol from the hash
+/* as the entry on the original `clisp' tables are also modified, we can easily
+   address a symbol on the symbol table with just the index to the `clisp'
+   table, instead of the on-the-fly symbol from the hash
 */
 enum clisp_libvsl_sym_t {
   __CLISP_PRIM_SYM_T    = 0,

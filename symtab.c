@@ -1,543 +1,436 @@
-#include "symtab.h" // also includes `pool.h'
+#include "symtab.h"
 #include "debug.h"
 #include "err.h"
+#include "mm.h"
+
+#include <strings.h>
 
 // TODO: implement lexical scoping
 
-#define SORT_FUNC_FOR(x) \
-  static inline bool in_between__##x(struct lisp_sym* ppm,             \
-                                     struct lisp_hash hash,            \
-                                     uint lower, uint upper) {         \
-    return hash.x >= ppm[lower].hash.x && hash.x <= ppm[upper].hash.x; \
-  } \
-  static inline bool ex_between__##x(struct lisp_sym* ppm,             \
-                                     struct lisp_hash hash,            \
-                                     uint lower, uint upper) {         \
-    return hash.x > ppm[lower].hash.x && hash.x < ppm[upper].hash.x;   \
-  } \
-  static inline bool repeats__##x(const struct sort_t* sort) {         \
-    return sort->mask & __LISP_HASH_##x;                               \
-  } \
-  static inline uint yield__##x(struct lisp_sym* ppm, uint i) {        \
-    return (uint) ppm[i].hash.x;                                       \
-  } \
-  static inline bool eq__##x(uint n, struct lisp_hash hash) {          \
-    return n == hash.x;                                                \
-  } \
-  static inline bool lt__##x(uint n, struct lisp_hash hash) {          \
-    return n < hash.x;                                                 \
-  } \
-  static struct sort_t sort_##x = {  \
-    .in_between  = in_between__##x,  \
-    .ex_between  = ex_between__##x,  \
-    .repeats     = repeats__##x,     \
-    .yield       = yield__##x,       \
-    .eq          = eq__##x,          \
-    .lt          = lt__##x,          \
-                                     \
-    .mask        = 0,                \
-    .next        = NULL,             \
-  }
-
-// what lack of classes does to a mfr...
-
 SORT_FUNC_FOR(len);
 SORT_FUNC_FOR(sum);
-SORT_FUNC_FOR(psum);
-SORT_FUNC_FOR(com_part);
+SORT_FUNC_FOR(wsum);
+SORT_FUNC_FOR(rlov);
 
+/**
+   the sort fields are (by priority):
+
+   1. @len
+   2. @sum
+   3. @wsum
+   4. @rlov
+
+   if any of the fields above are the same, the next one in line will sort the
+   entries. these functions are called on top of one another through
+   `lisp_symtab_sort`
+*/
 static struct sort_t* const sort_entry = &sort_len;
+static struct lisp_sym_cell*    symtab = NULL;
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static uint hash_i = 1;
-POOL_T* symtab = NULL;
-
-// NOTE: this init is a bit bigger, so it's better to for it to be initialized
-// in .data already. the same is *not* true for `sexp.c'
-struct lisp_symtab_pp symtab_pp[SYMTAB_CELL] = {0};
-
-// TODO: stub
-static inline void pool_clean(POOL_T* pp) {
-  return;
-}
-
-static inline int s(int t) {
-  return t*(t+1)/2;
-}
-
-static inline int mod_norm(int val, int len) {
-  return val - s(len);
-}
-
+/**
+   Boolean equality from hashes @hash_a and @hash_b
+ */
 static inline bool hash_eq(struct lisp_hash hash_a, struct lisp_hash hash_b) {
   return (hash_a.sum == hash_b.sum)  &&
-    (hash_a.psum     == hash_b.psum) &&
+    (hash_a.wsum     == hash_b.wsum) &&
     (hash_a.len      == hash_b.len)  &&
-    (hash_a.com_part == hash_b.com_part);
+    (hash_a.rlov     == hash_b.rlov);
 }
 
-////////////////////////////////////////////////////////////////////////////////
+//// STATIC
 
-/**              to_pp        from_pp
-   [ . . . . | . . . . | . . . . ]
-                 ^to_idx(2)    ^from_idx(1)
-                      <------
-*/
-static void lisp_symtab_sort_backprog(POOL_T* from_pp, uint from_idx,
-                                      POOL_T* to_pp,   uint to_idx) {
-  struct lisp_sym tmp = {0}, * tmpp = NULL;
-  struct lisp_sym* mem = NULL;
-  POOL_T* pp = from_pp;
-  uint iter = 0;
-
-  from_idx = IDX_HM(from_idx);
-  to_idx   = IDX_HM(to_idx);
-
-  do {
-    mem = pp->mem;
-
-    // swap the last one's element with the first element of the current one
-    if (iter > 0) {
-      *tmpp  = mem[0];
-      mem[0] = tmp;
-    }
-
-    DB_FMT("[ == ] lisp_symtab_sort_backprog: i = %d",
-           ((pp == from_pp)? from_idx: SYMPOOL));
-    DB_FMT("[ == ] lisp_symtab_sort_backprog: lim = %d",
-           ((pp == to_pp)? to_idx: 0));
-
-    // always go 0->SYMPOOL (a -> b), unless in the edges:
-    //   from-edge: 0      -> from_idx
-    //   to-edge:   to_idx -> SYMPOOL
-
-    for (uint a = ((pp == from_pp)? from_idx: SYMPOOL),
-              b = ((pp == to_pp)?   to_idx:   0);
-         a > b; --a) {
-      tmp      = mem[a];
-      mem[a]   = mem[a-1];
-      mem[a-1] = tmp;
-    }
-
-    tmpp = mem;
-
-    // we're done :)
-    if (pp == to_pp) {
-      return;
-    }
-  } while (++iter, pp->prev);
-}
-
-struct lisp_sort_same_ret {
-  POOL_T* pp;  /** @pp: the pool thread */
-  uint    idx; /** @idx: the index in @pp::mem */
-};
-
-// find the last one in a thread that's the same as us
-static struct lisp_sort_same_ret
-lisp_symtab_sort_lsame(POOL_T* base_pp, uint base_idx, struct lisp_hash hash,
-                       const struct sort_t* sort) {
-  struct lisp_sort_same_ret ret = {
-    .pp  = base_pp,
-    .idx = base_idx,
-  };
-
-  POOL_T* pp = ret.pp;
-  uint    i  = ret.idx;
-
-  base_idx = IDX_HM(base_idx);
-
-  do {
-    struct lisp_sym* mem = pp->mem;
-
-    for (i = ((pp == base_pp)? base_idx: 0); i < SYMPOOL; ++i) {
-      uint yie = sort->yield(mem, i);
-
-      if (!sort->eq(yie, hash)) {
-        goto done;
-      }
-    }
-
-    pp = pp->next;
-  } while (pp);
-
-done:
-  ret.pp  = pp;
-  ret.idx = IDX_MH(i);
-
-  return ret;
-}
-
-static struct lisp_sort_ret
-lisp_symtab_sort_lsmall(const uint pp_idx, struct lisp_sym* mem,
-                        struct lisp_hash hash, const struct sort_t* sort) {
+/**
+   Perform a single-character @c hash given the existing hasher @hash
+ */
+struct lisp_hash_ret hash_c(struct lisp_hash hash, char c) {
   register int ret = 0;
 
-  struct lisp_sort_ret ret_t = {
-    .master = -1u,
-  };
+  struct lisp_hash_ret hash_ret;
 
-  uint i = 0;
-
-  // find the least small element with respect to `hash'
-  for (uint lower = 0; i < pp_idx; ++i) {
-    uint yie = sort->yield(mem, i);
-
-    if (sort->lt(yie, hash)) {
-      if (yie > lower) {
-        ret_t.master = IDX_MH(i);
-      }
-
-      continue;
-    }
-
-    assert(!sort->eq(yie, hash), __SORT_NEXT);
-
-    // greater-than: we're done
-    break;
-  }
-
-  // we didn't find anything: the thread is probably not sorted, it's safe to
-  // put ourselves at the first position
-  if (ret_t.master == -1u) {
-    ret_t.master = 1;
-  }
-
-  defer((ret_t.master == pp_idx)? __SORT_RETURN: __SORT_OK);
-
-  done_for_with(ret_t, ret_t.slave = ret);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-static int lisp_symtab_sort_base(POOL_T* pp, uint idx, struct lisp_hash hash,
-                                 const struct sort_t* sort) {
-  register int ret = 0;
-
-  POOL_T* cpp  = NULL,
-        * base = pp;
-
-  struct lisp_sym* mem       = pp->mem,
-                 * base_mem  = base->mem;
-  struct lisp_sort_ret sstat = {0};
-  struct lisp_sort_same_ret smstat = {0};
-
-  const uint base_idx = idx;
-
-  // we're the biggest: the good ending
-  if (IDX_HM(idx) == 0) {
-    cpp = pp;
-    pp  = pp->prev;
-
-    // nothing to sort
-    assert(pp, 0);
-
-    // check against the previous thread
-    assert(!sort->lt(sort->yield(pp->mem, IDX_HM(SYMPOOL)), hash), 0);
-
-    pp = cpp;
-  }
-  else if (sort->lt(sort->yield(mem, IDX_HM(idx) - 1), hash)) {
-    defer_as(0);
-  }
-
-  do {
-    cpp = pp;
-    mem = pp->mem;
-    idx = pp->p_idx;
-
-    // inclusively in between its base and its neighbour: find the smallest, put
-    // ourselves one entry after it
-    if (sort->in_between(mem, hash, 0, IDX_HM(idx))) {
-      sstat = lisp_symtab_sort_lsmall(pp->p_idx, mem, hash, sort);
-
-      switch (sstat.slave) {
-      case __SORT_NEXT:
-        goto next;
-      case __SORT_RETURN:
-        defer_as(0);
-      default:
-        // we found something smaller than us with no repetition: the ok ending
-        lisp_symtab_sort_backprog(base, base_idx, pp, sstat.master);
-        defer_as(0);
-      }
-    }
-
-    pp = pp->prev;
-  } while (pp);
-
-  /** at the first pool thread */
-
-  pp  = cpp;
-  mem = pp->mem;
-
-  sstat = lisp_symtab_sort_lsmall(pp->p_idx, mem, hash, sort);
-
-  switch (sstat.slave) {
-  case __SORT_NEXT:
-    goto next;
-  case __SORT_RETURN:
-    defer_as(0);
-  default:
-    // we tried to find something smaller us, if we hit this function we're
-    // the smallest in the thread, so we swap with the base. this is the *worst*
-    // case, and is O(n) time-wise: the bad ending
-    lisp_symtab_sort_backprog(base, base_idx, pp, sstat.master);
-    defer_as(0);
-  }
-
-next:
-  base_mem->hash.rep |= sort->mask;
-  smstat = lisp_symtab_sort_lsame(pp, sstat.master, hash, sort);
-
-  // if we're here, we have to back-prog either way, so might as well do it now
-  lisp_symtab_sort_backprog(base, base_idx, smstat.pp, smstat.idx);
-
-  assert(sort->next, err(EHASHERR));
-
-  ret = lisp_symtab_sort_base(smstat.pp, smstat.idx, hash, sort->next);
-  assert(ret == 0, OR_ERR());
-
-  done_for(ret);
-}
-
-/** the sort fields are (by priority):
-
-    1. ::len
-    2. ::sum
-    3. ::psum
-    4. ::com_part
-
-    if any of the fields above are the same, the next one in line will sort the
-    entries. these functions are called on top of one another
-*/
-static int lisp_symtab_sort(POOL_T* pp, uint idx, struct lisp_hash hash) {
-  return lisp_symtab_sort_base(pp, idx, hash, sort_entry);
-}
-
-static struct lisp_sym_ret
-lisp_symtab_get_sorted(POOL_T* pp, struct lisp_hash hash,
-                       const struct sort_t* sort) {
-  register int ret = 0;
-
-  POOL_T* cpp = NULL;
-  struct lisp_sym_ret ret_t = {0};
-
-  struct lisp_sym* mem = NULL;
-
-  uint idx = 0;
-
-  do {
-    cpp = pp;
-    mem = pp->mem;
-    idx = pp->p_idx;
-
-    // in between the current chunk
-    if (sort->in_between(mem, hash, 0, IDX_HM(idx))) {
-      // find the smallest instance, or the only instance
-      for (uint i = 0; i < idx; ++i) {
-        if (sort->eq(sort->yield(mem, i), hash)) {
-          if (sort->repeats(sort)) {
-            goto next;
-          }
-
-          ret_t.master = (mem+i);
-          defer();
-        }
-      }
-    }
-
-    // `mem[pp->idx - 1].x < hash.x' means we're way out of range
-    assert(!sort->lt(sort->yield(mem, IDX_HM(pp->p_idx)), hash), 1);
-
-    pp = pp->next;
-  } while (pp);
-
-  assert(ret_t.master != NULL, 1);
-
-next:
-  pp = cpp;
-
-  if (sort->next) {
-    ret_t = lisp_symtab_get_sorted(pp, hash, sort->next);
-    ret   = ret_t.slave;
-    assert(ret == 0, 1);
-  }
-  else {
-    assert(ret == 0, 1);
-  }
-
-  done_for_with(ret_t, ret_t.slave = ret);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-struct lisp_hash_ret inc_hash(struct lisp_hash hash, char c) {
-  register int ret = 0;
-
-  struct lisp_hash_ret hash_ret = {
-    .master = hash,
-    .slave  = 0,
-  };
-
-  assert(hash.len < SYMTAB_MAX_SYM, err(EIDTOOBIG));
+  assert(hash.len < SYMTAB_MAX_SYM_LEN, err(EIDTOOBIG));
 
   ASCII_NORM(c);
 
-  uchar prt_pre  = hash.psum % SYMTAB_CELL;
-  hash.sum      += c*hash_i;
-  hash.psum     += c;
-  uchar prt_post = c;
+  register uint _c   = ((hash.len+1)*c + hash.sum)*SYMTAB_PRIM;
+  register uint _sum = hash.sum;
 
-  hash_i *= SYMTAB_PRIM;
-  hash_i %= SYMTAB_CELL;
+  hash.wsum += c*hash.w;
+  hash.sum  += _c;
+
+  if ((hash.sum & 0b111) > (_sum & 0b111)) {
+    hash.rlov += _c*hash.w;
+    hash.w    *= _c;
+    hash.w   <<= 1;
+    ++hash.w;
+  }
 
   ++hash.len;
-
-  // TODO: another field, `::com_mod', that contains similar information to
-  // `::com_part', but uses the `SYMTAB_CELL` module
-
-  // cache if there was a roll-over
-  if ((prt_pre + prt_post) > SYMTAB_MAX_SYM) {
-    hash.com_part += c*hash_i;
-  }
 
   hash_ret.master = hash;
 
   done_for_with(hash_ret, hash_ret.slave = ret);
 }
 
-void inc_hash_done(struct lisp_hash* hash) {
-  hash->sum = mod_norm(hash->sum, hash->len);
-
-  hash_i = 1;
-}
-
+/**
+   Resets the value of the hasher @hash. Useful after finishing the
+   single-character hash
+ */
 void hash_done(struct lisp_hash* hash) {
-  hash->sum      = 0;
-  hash->psum     = 0;
-  hash->len      = 0;
-  hash->com_part = 0;
+  hash->w    = 1;
+  hash->sum  = 0;
+  hash->wsum = 0;
+  hash->len  = 0;
+  hash->rlov = 0;
 }
 
-struct lisp_hash_ret str_hash(const char* str) {
+/**
+   Hash string @str returning a hash to it
+ */
+struct lisp_hash_ret hash_str(const char* str) {
   register int ret = 0;
 
   struct lisp_hash_ret hash_ret = {
-    .master = {0},
+    .master = {
+      .w = 1,
+    },
     .slave  = 0,
   };
 
   char c = '\0';
 
-  DB_FMT("[ == ] symtab: for string: %s", str);
+  DB_FMT("[ symtab ] for string: %s", str);
 
   for (uint i = 0; (c = str[i]); ++i) {
-    hash_ret = inc_hash(hash_ret.master, c);
-    ret      = hash_ret.slave;
+    hash_ret = hash_c(hash_ret.master, c);
 
-    DB_FMT("[ == ] symtab: character (%c) (%d)", c, hash_ret.master.sum);
+    DB_FMT("[ symtab ] character (%c) [%d]", c, HASH_IDX(hash_ret.master));
 
-    assert(ret == 0, OR_ERR());
+    assert(hash_ret.slave == 0, OR_ERR());
   }
 
-  inc_hash_done(&hash_ret.master);
   done_for_with(hash_ret, hash_ret.slave = ret);
 }
 
-static struct lisp_sym_ret lisp_symtab_get_for_set(struct lisp_hash hash) {
-  register int ret = 0;
+////////////////////////////////////////////////////////////////////////////////
 
-  struct lisp_sym_ret ret_t = {0};
-  const uint idx = HASH_IDX(hash);
+/**
+   Applies the 'backprog' algorithm, similar to insertion sort.
 
-  POOL_T* base_pp = symtab_pp[idx].base;
+   It swaps
+ */
+static struct lisp_sym*
+lisp_symtab_sort_backprog(struct lisp_sym_cell* ccell, ushort goal_i,
+                          struct lisp_sym sym) {
+  register int       ret = 0;
+  struct lisp_sym* ret_t = NULL;
 
-  // no symbols yet: good to go!
-  if (!base_pp->p_idx) {
-    defer();
+  struct lisp_sym  reg_a, reg_b;
+
+  struct lisp_sym* symarr;
+  uint             c_size = 0;
+
+  symarr = ccell->entry.sym;
+  ret_t  = (ccell->entry.sym + goal_i);
+
+  reg_a  = ccell->entry.sym[goal_i];
+  ccell->entry.sym[goal_i] = sym;
+
+  do {
+    c_size = ccell->entry.size;
+    symarr = ccell->entry.sym;
+
+    for (uint i = (goal_i + 1); i < c_size; ++i) {
+      reg_b     = symarr[i];
+      symarr[i] = reg_a;
+      reg_a     = reg_b;
+    }
+  } while(ccell->next && (ccell = ccell->next));
+
+  // on the edge
+  if (c_size == SYMTAB_ENTRIES) {
+    ccell->next = mm_alloc(sizeof(struct lisp_sym_cell));
+    assert(ccell->next, OR_ERR());
+
+    ccell = ccell->next;
+    ccell->entry.size = 0;
+    symarr      = ccell->entry.sym;
+    symarr[0]   = reg_a;
   }
 
-  DB_FMT("[ == ] symtab(get-for-set): trying to get index %d", idx);
+  else {
+    symarr[c_size] = reg_a;
+  }
 
-  ret_t = lisp_symtab_get_sorted(base_pp, hash, sort_entry);
-  ret   = ret_t.slave;
-
-  assert(ret == 0 && hash_eq(ret_t.master->hash, hash), 1);
-
-  done_for_with(ret_t, ret_t.slave = ret);
+  done_for((ret_t = ret? NULL: ret_t));
 }
 
-// TODO: we could probably return `struct lisp_sym_ret' like `get' does
-int lisp_symtab_set(struct lisp_sym sym) {
-  register int ret = 0;
+/**
+   Find the 'last equal' to a symbol @sym element given an symbol array pointed
+   to by the cell @entry, and a field sorted by @sort
+ */
+static struct lisp_sym_cell*
+lisp_symtab_sort_lsteq(struct lisp_sym_cell* ccell, uint lteq_i,
+                       struct lisp_sym sym, struct sort_t* sort) {
+  uint       idx = 0;
+  uint hsh_yield = sort->hsh_yield(sym.hash);
 
-  const uint idx = HASH_IDX(sym.hash);
-  uint pp_idx    = 0;
+  uint i = lteq_i;
 
-  struct lisp_sym_ret sym_ret = lisp_symtab_get_for_set(sym.hash);
+  do {
+    idx = ccell->entry.size;
 
-  // what we're trying to set already exists
-  if (sym_ret.master) {
-    // TODO: stub; should overwrite the existing symbol
-    DB_MSG("[ == ] symtab: symbol to be set already exists");
-    defer();
-  }
+    for (; i < idx; ++i) {
+      if (hsh_yield > sort->sym_yield(ccell->entry.sym + i)) {
+        break;
+      }
+    }
 
-  DB_FMT("[ == ] symtab: adding at index %d\n---", idx);
+    i = 0;
+  } while (ccell->next && (ccell = ccell->next));
 
-  POOL_T*    mpp = symtab_pp[idx].mem;
-  POOL_RET_T pr  = pool_add_node(mpp);
-  assert(pr.stat == 0, OR_ERR());
-
-  if (pr.new != pr.base) {
-    mpp = symtab_pp[idx].mem = pr.new;
-  }
-
-  pp_idx = mpp->p_idx;
-
-  mpp->mem[IDX_HM(pp_idx)] = sym;
-
-  ret = lisp_symtab_sort(mpp, pp_idx, sym.hash);
-  assert(ret == 0, OR_ERR());
-
-  done_for(ret);
+  return ccell;
 }
 
-struct lisp_sym_ret lisp_symtab_get(struct lisp_hash hash) {
-  register int ret = 0;
+/**
+   Tries to insert symbol @sym close to the entry cell @entry
 
-  struct lisp_sym_ret ret_t = {0};
-  const uint idx = HASH_IDX(hash);
+   It will try to see if the symbol can be inserted in the current cell. This
+   function is called primarily by `lisp_symtab_set_sorted', which means the
+   current cell is *always* inclusive to the symbol
+ */
+static struct lisp_sym*
+lisp_symtab_sort_insert(struct lisp_sym_cell* ccell, struct lisp_sym sym,
+                        struct sort_t* sort) {
+  register int       ret = 0;
+  struct lisp_sym* ret_t = NULL;
 
-  POOL_T* base_pp = symtab_pp[idx].base;
+  uint                 c_size = 0;
+  uint                   lteq = 0;
+  uint              hsh_yield = 0;
 
-  assert(base_pp->p_idx, err(ENOTFOUND));
+insert:
+  c_size    = ccell->entry.size;
+  lteq      = 0;
+  hsh_yield = sort->hsh_yield(sym.hash);
 
-  DB_FMT("[ == ] symtab: trying to get index %d", idx);
+  // find the last element that's smaller than or equal to us
+  for (uint i = 0; i < c_size; ++i) {
+    register uint sym_yield = sort->sym_yield(ccell->entry.sym + i);
 
-  ret_t = lisp_symtab_get_sorted(base_pp, hash, sort_entry);
-  ret   = ret_t.slave;
+    if (sym_yield <= hsh_yield) {
+      lteq = i;
+    }
+  }
 
-  assert(ret == 0 && hash_eq(ret_t.master->hash, hash), err(ENOTFOUND));
+  // repeats: find the last one that does, mask the one previous, as well as
+  // ourselves, with field that repeated
+  if (sort->hsh_yield(sym.hash) == sort->sym_yield(ccell->entry.sym + lteq)) {
+repeats:
+    // the one that's equal to us, as well as ourselves, gets marked
+    (ccell->entry.sym + lteq)->rep |= sort->field;
+    sym.rep |= sort->field;
 
-  done_for_with(ret_t, ret_t.slave = ret);
+    ccell    = lisp_symtab_sort_lsteq(ccell, lteq, sym, sort);
+    sort     = sort->next;
+    assert(sort, err(EFUCKINGHASH));
+
+    goto insert;
+  }
+
+  // there are elements to the right of us: backprog
+  else if (IDX_MH(lteq) < c_size) {
+    ret_t = lisp_symtab_sort_backprog(ccell, IDX_MH(lteq), sym);
+  }
+
+  // we're the last one, with empty elements to the right, and not on edge
+  else if (IDX_MH(lteq) == c_size && c_size < SYMTAB_ENTRIES) {
+    ret_t = (ccell->entry.sym + IDX_MH(lteq));
+  }
+
+  // we're the *literal* last one: see if the right has anything
+  else if (IDX_MH(lteq) == SYMTAB_ENTRIES) {
+    // there's a right: see if the first element repeats, if so we're unlucky,
+    // if not do allocation
+    if (ccell->next && sort->hsh_yield(sym.hash) ==
+                       sort->sym_yield(ccell->next->entry.sym)) {
+      ccell = ccell->next;
+      goto repeats;
+    }
+
+    // there's nothing on the right: allocate the new right, put us there
+    ccell->next = mm_alloc(sizeof(struct lisp_sym_cell));
+    assert(ccell->next, OR_ERR());
+
+    ccell = ccell->next;
+
+    ccell->entry.size = 0;
+    ret_t = ccell->entry.sym;
+  }
+
+  done_for((ret_t = ret? NULL: ret_t));
 }
 
-int symtab_init(bool force) {
+/**
+   Tries to set symbol @sym at index @idx on the symbol table
+ */
+static struct lisp_sym*
+lisp_symtab_set_sorted(struct lisp_sym_cell* ccell, struct lisp_sym sym,
+                       const struct sort_t* sort) {
+  register int       ret = 0;
+  struct lisp_sym* ret_t = NULL;
+
+  uint               idx = ccell->entry.size;
+
+  // the good ending
+  if (!idx) {
+    ret_t = ccell->entry.sym;
+    goto assign;
+  }
+
+  // the left edge is bigger than us: backprog us to the left edge
+  if (sort->hsh_yield(sym.hash) < sort->sym_yield(ccell->entry.sym)) {
+    ret_t = lisp_symtab_sort_backprog(ccell, 0, sym);
+    goto assign;
+  }
+
+  // find the cell we're in between
+  do {
+    idx = ccell->entry.size;
+
+    if (sort->in_between(ccell->entry.sym, sym.hash, 0, IDX_HM(idx))) {
+      ret_t = lisp_symtab_sort_insert(ccell, sym, (struct sort_t*) sort);
+      goto assign;
+    }
+  } while (ccell->next && (ccell = ccell->next));
+
+  // we're bigger than the right edge: add us as the new right edge, or the new
+  // symbol array
+  if (idx < SYMTAB_ENTRIES) {
+    ret_t = (ccell->entry.sym + idx);
+  }
+  else {
+    ccell->next = mm_alloc(sizeof(struct lisp_sym_cell));
+    assert(ccell->next, OR_ERR());
+
+    ccell = ccell->next;
+
+    ccell->entry.size = 0;
+    ret_t = ccell->entry.sym;
+  }
+
+assign:
+  ++ccell->entry.size;
+  *ret_t = sym;
+
+  done_for((ret_t = ret? NULL: ret_t));
+}
+
+/**
+   Find symbol in the symbol table from hash @hash given an assorted state
+ */
+static struct lisp_sym*
+lisp_symtab_get_sorted(struct lisp_sym_cell* ccell, struct lisp_hash hash,
+                       const struct sort_t* sort) {
+  register int       ret = 0;
+  struct lisp_sym* ret_t = NULL;
+
+  uint               idx = 0;
+
+  uint         hsh_yield = sort->hsh_yield(hash);
+  uint         sym_yield = sort->sym_yield(ccell->entry.sym);
+
+  // the first entry: if the hash is smaller than the base, we know there's
+  // nothing for us
+  assert(sym_yield <= hsh_yield, err(ENOTFOUND));
+
+  do {
+    idx = ccell->entry.size;
+
+    // in between the current cell
+    if (sort->in_between(ccell->entry.sym, hash, 0, (idx - 1))) {
+      for (uint i = 0; i < idx && sym_yield <= hsh_yield; ++i) {
+        sym_yield = sort->sym_yield(ccell->entry.sym + i);
+
+        // this repeats on the given field; find it on the next field
+        if (sort->repeats(ccell->entry.sym + i)) {
+          goto next;
+        }
+
+        if (sym_yield == hsh_yield) {
+          ret_t = (ccell->entry.sym + i);
+        }
+      }
+    }
+  } while (ccell->next && (ccell = ccell->next));
+
+  assert(ret_t, err(ENOTFOUND));
+  defer();
+
+next:
+  if (sort->next) {
+    ret_t = lisp_symtab_get_sorted(ccell, hash, sort->next);
+    assert(ret_t, OR_ERR());
+  }
+
+  assert(ret_t, err(EFUCKINGHASH));
+
+  done_for((ret_t = ret? NULL: ret_t));
+}
+
+//// STATIC
+
+/**
+   Sets @sym as a symbol on the symbol table, returning its memory
+ */
+struct lisp_sym* lisp_symtab_set(struct lisp_sym sym) {
+  register int       ret = 0;
+  struct lisp_sym* ret_t = NULL;
+
+  const uint         idx = HASH_IDX(sym.hash);
+
+  DB_FMT("[ symtab ] adding at index %d\n---", idx);
+
+  ret_t = lisp_symtab_set_sorted((symtab + idx), sym, sort_entry);
+  assert(ret_t, OR_ERR());
+
+  done_for((ret_t = ret? NULL: ret_t));
+}
+
+/**
+   Gets a symbol of hash @hash from the symbol table
+ */
+struct lisp_sym* lisp_symtab_get(struct lisp_hash hash) {
+  register int       ret = 0;
+  struct lisp_sym* ret_t = NULL;
+
+  const uint         idx = HASH_IDX(hash);
+
+  DB_FMT("[ symtab ] getting index %d", idx);
+
+  struct lisp_sym_cell* ccell = (symtab + idx);
+
+  assert(ccell->entry.size > 0, err(ENOTFOUND));
+
+  ret_t = lisp_symtab_get_sorted(ccell, hash, sort_entry);
+  assert(ret_t && hash_eq(ret_t->hash, hash), OR_ERR());
+
+  done_for((ret_t = ret? NULL: ret_t));
+}
+
+int lisp_symtab_init(void) {
   register int ret = 0;
 
-  symtab = calloc(sizeof(POOL_T), SYMTAB_CELL);
-  assert(symtab, err(EOOM));
+  symtab = mm_alloc(SYMTAB_CELLS*sizeof(struct lisp_sym_cell));
+  assert(symtab, OR_ERR());
 
-  for (uint i = 0; i < SYMTAB_CELL; ++i) {
-    symtab_pp[i].mem = symtab_pp[i].base = (symtab + i);
-  }
+  // `mm_alloc' doesn't initialize the memory for us
+  bzero(symtab, SYMTAB_CELLS*sizeof(struct lisp_sym_cell));
 
   sort_len.next  = &sort_sum;
-  sort_sum.next  = &sort_psum;
-  sort_psum.next = &sort_com_part;
+  sort_sum.next  = &sort_wsum;
+  sort_wsum.next = &sort_rlov;
 
   done_for(ret);
 }

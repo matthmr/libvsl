@@ -1,4 +1,4 @@
-// libvsl: a vsl implementation; not bootstrapped
+// LIBVSL: a VSL backend library implementation
 
 #define LIBVSL_BACKEND
 
@@ -7,17 +7,16 @@
 int main(void) {
   register int ret = 0;
 
-  sexp_init();
-  MAYBE_INIT(symtab_init(false));
+  MAYBE_INIT(mm_init());
+  MAYBE_INIT(lisp_symtab_init());
 
   if (frontend) {
-    ret = frontend();
-    assert(ret == 0, err(EFRONTEND));
+    MAYBE_INIT(frontend());
   }
 
   MAYBE_INIT(lisp_prim_init());
 
-  ret = parse_bytstream(STDIN_FILENO);
+  return lisp_parser(STDIN_FILENO);
 
   done_for(ret);
 }

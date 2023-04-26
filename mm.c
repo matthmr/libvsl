@@ -72,13 +72,13 @@ void* mm_alloc(const uint m_size) {
     // this is *always* virtual
     if (!ALLOC_SELF(c_stat) && c_header->m_alloc >= m_size) {
       // NOTE: 'edge' memory is considered 'virtual' at least once
-      DB_MSG("  -> mm: alloc: on virtual memory");
+      DB_MSG("  -> alloc: on virtual memory");
       break;
     }
 
     // this is *never* virtual
     else if (!ALLOC_NEXT(c_stat)) {
-      DB_MSG("  -> mm: alloc: on edge");
+      DB_MSG("  -> alloc: on edge");
 
       c_stat            |= __MM_ALLOC_NEXT;
       c_header->s_alloc |= c_stat;
@@ -134,7 +134,7 @@ alloc:
     n_header = __mm_header_next(c_header);
 
     if (c_header->m_alloc > m_size) {
-      DB_MSG("  -> mm: alloc: new virtual memory");
+      DB_MSG("  -> alloc: new virtual memory");
       c_header->m_alloc  = m_size;
 
       register struct mm_header* vm_header = __mm_header_next(c_header);
@@ -147,7 +147,7 @@ alloc:
       vm_header->s_alloc = (__MM_ALLOC_PREV | __MM_ALLOC_NEXT);
     }
     else {
-      DB_MSG("  -> mm: alloc: reusing virtual memory");
+      DB_MSG("  -> alloc: reusing virtual memory");
       n_header->s_alloc |= __MM_ALLOC_PREV;
     }
   }
@@ -178,8 +178,10 @@ void mm_free(void* m_mem) {
   enum mm_alloc_stat  c_stat = __MM_ALLOC_FREE;
   enum mm_alloc_stat   _stat = __MM_ALLOC_FREE;
 
+#ifdef DEBUG
   register const uint m_size = (uint)
     (c_header->m_alloc - sizeof(struct mm_header));
+#endif
 
   DB_FMT("[ mm ] free: size = %d", m_size);
 
@@ -189,14 +191,14 @@ void mm_free(void* m_mem) {
   //// FIND THE CURRENT AVAILABLE CHUNK
 
   if (ALLOC_PREV(c_stat)) {
-    DB_MSG("  -> mm: free: handle prev memory");
+    DB_MSG("  -> free: handle prev memory");
 
     p_header = __mm_header_prev(c_header);
     _stat    = p_header->s_alloc;
 
     // prev is virtual: join it with us
     if (!ALLOC_SELF(_stat)) {
-      DB_MSG("  -> mm: free: prev is virtual");
+      DB_MSG("  -> free: prev is virtual");
 
       p_header->m_alloc += c_header->m_alloc;
       c_header           = p_header;
@@ -216,14 +218,14 @@ void mm_free(void* m_mem) {
 alloc_next:
 
   if (ALLOC_NEXT(c_stat)) {
-    DB_MSG("  -> mm: free: handle next memory");
+    DB_MSG("  -> free: handle next memory");
 
     n_header = __mm_header_next(c_header);
     _stat    = n_header->s_alloc;
 
     // next is virtual: join us with it
     if (!ALLOC_SELF(_stat)) {
-      DB_MSG("  -> mm: free: next is virtual");
+      DB_MSG("  -> free: next is virtual");
 
       c_header->m_alloc += n_header->m_alloc;
 
@@ -246,7 +248,7 @@ alloc_next:
     c_stat = n_header->s_alloc;
 
     if (ALLOC_PREV(c_stat)) {
-      DB_MSG("  -> mm: free: fix next memory");
+      DB_MSG("  -> free: fix next memory");
       n_header->s_alloc &= ~__MM_ALLOC_PREV;
     }
   }
