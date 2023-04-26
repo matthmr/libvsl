@@ -323,14 +323,8 @@ lisp_stack_lex_frame_ev_pf(struct lisp_frame* const framep) {
     stack->expr = lisp_sexp_node(stack->expr);
     assert(stack->expr, OR_ERR());
 
-    // since this is always called after top-level, and lit_paren is 0, this
-    // will never produce false negatives
-    if (stack->lit_paren < stack->paren) {
+    if (!stack->lit_paren) {
       stack->lit_paren  = stack->paren;
-
-      // stack->ev        &= ~__STACK_QUOT;
-      // stack->expr       = NULL;
-      // ++framep->argv;
     }
     else {
       DB_MSG("  -> push: symbolic");
