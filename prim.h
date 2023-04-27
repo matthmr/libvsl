@@ -6,14 +6,14 @@
 #  include "lisp.h" // also includes `symtab.h', `sexp.h'
 
 #  define CLISP_PRIM_DECLFUN(__fun,__funname,_s0,_s1,_l0,_l1) \
-  {                           \
-    .str = __fun,             \
-    .sym = {                  \
-      .typ  = __LISP_TYP_FUN, \
-      .dat  = __funname,      \
-      .size = {_s0, _s1},     \
-      .litr = {_l0, _l1},     \
-    },                        \
+  {                                  \
+    .str = __fun,                    \
+    .sym = {                         \
+      .typ  = __LISP_TYP_FUN,        \
+      .dat  = lisp_prim_##__funname, \
+      .size = {_s0, _s1},            \
+      .litr = {_l0, _l1},            \
+    },                               \
   }
 
 #  define CLISP_PRIM_DECLSYM(__sym,__val) \
