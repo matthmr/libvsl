@@ -20,8 +20,8 @@ Notice that this *is* less powerful than GPLD, as it is used only in the stage 0
 of bootstrapping for GPLD. That means you still have to write C code for your
 LISP functions/objects and you won't have numeric literals.
 
-See the LIBVSL's [documentation](./LIBVSL.md) to get a quick manual on how to
-make a LISP with LIBVSL.
+See the LIBVSL's [documentation](./docs/LIBVSL.org) to get a quick manual on how
+to make a LISP with LIBVSL.
 
 *NOTE*: while this library *is* able to implement a LISP with `PRIMVSL`, defined
         in `prim_defun.c`, it is best suited as a *base* to implement your own
