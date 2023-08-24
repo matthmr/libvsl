@@ -2,19 +2,19 @@
 #  define LOCK_LEX
 
 #  include "symtab.h" // also includes `utils.h'
-#  include "stack.h"  // also includes `sexp.h'
+#  include "stack.h"  // also includes `lisp.h'
 
 #  ifndef IOBLOCK
 #    define IOBLOCK (4096)
 #  endif
 
 #  define __LISP_C_WHITESPACE \
-       0x00:                  \
-  case 0x20:                  \
-  case 0x09:                  \
-  case 0x0a:                  \
-  case 0x0b:                  \
-  case 0x0c:                  \
+       0x00: \
+  case 0x20: \
+  case 0x09: \
+  case 0x0a: \
+  case 0x0b: \
+  case 0x0c: \
   case 0x0d
 
 #  define __LISP_ALLOWED_IN_NAME(x) \

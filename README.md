@@ -1,6 +1,7 @@
 # vsl - Very Small/Simple Lisp
 
-A very small implementation of LISP, nothing too fancy.
+A very small LISP implementation framework: a library you can program alongside
+to produce a LISP.
 
 ## Building
 
@@ -9,24 +10,17 @@ Run `./configure` then `make libvsl.a` to compile the project. Run `./configure
 
 Run either `./configure --help` or `make help` or both for more info.
 
-## Usage in other projects
+## API
 
-I started this as a sanity check to see if I was able to implement a fully
-functioning static LISP for the stage 0 of bootstrapping of GPLD, but I realized
-this may be useful as a standalone library. So I decided to build a library
-version of this program.
+See the LIBVSL's [documentation](./docs/LIBVSL.org) to get a quick manual on
+using the API to make a LISP with LIBVSL.
 
-Notice that this *is* less powerful than GPLD, as it is used only in the stage 0
-of bootstrapping for GPLD. That means you still have to write C code for your
-LISP functions/objects and you won't have numeric literals.
+## Motive
 
-See the LIBVSL's [documentation](./docs/LIBVSL.org) to get a quick manual on how
-to make a LISP with LIBVSL.
-
-*NOTE*: while this library *is* able to implement a LISP with `PRIMVSL`, defined
-        in `prim_defun.c`, it is best suited as a *base* to implement your own
-        LISP on top of some primitives defined for turing completion (`set`,
-        `if`, etc).
+This is the standalone version of the step 0 of the bootstrapping process of
+GPLD. As such, the LISPs you can make with this library are pretty limited in
+scope and syntax, as we want something really simple to parse (the lexer doesn't
+even use regexes!)
 
 # License
 

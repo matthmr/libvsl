@@ -1,9 +1,25 @@
-#include "symtab.h"
 #include "debug.h"
+
+#include "symtab.h"
 #include "err.h"
 #include "mm.h"
 
 #include <strings.h>
+
+//// ERRORS
+
+ECODE(EIDTOOBIG, EFUCKINGHASH, ENOTFOUND);
+
+EMSG {
+  [EIDTOOBIG]    = ERR_STRING("libvsl: lexer", "identifier is too big"),
+  [EFUCKINGHASH] = ERR_STRING("libvsl: symtab",
+                              "internal error with the hash function"),
+  [ENOTFOUND]    = ERR_STRING("libvsl: symtab", "symbol was not found"),
+};
+
+MK_ERR;
+
+////////////////////////////////////////////////////////////////////////////////
 
 // TODO: implement lexical scoping
 
@@ -32,14 +48,12 @@ static struct lisp_sym_cell*    symtab = NULL;
 /**
    Boolean equality from hashes @hash_a and @hash_b
  */
-static inline bool hash_eq(struct lisp_hash hash_a, struct lisp_hash hash_b) {
+bool hash_eq(struct lisp_hash hash_a, struct lisp_hash hash_b) {
   return (hash_a.sum == hash_b.sum)  &&
     (hash_a.wsum     == hash_b.wsum) &&
     (hash_a.len      == hash_b.len)  &&
     (hash_a.rlov     == hash_b.rlov);
 }
-
-//// STATIC
 
 /**
    Perform a single-character @c hash given the existing hasher @hash
@@ -414,7 +428,7 @@ struct lisp_sym* lisp_symtab_get(struct lisp_hash hash) {
   assert(ccell->entry.size > 0, err(ENOTFOUND));
 
   ret_t = lisp_symtab_get_sorted(ccell, hash, sort_entry);
-  assert(ret_t && hash_eq(ret_t->hash, hash), OR_ERR());
+  assert(ret_t && hash_eq(ret_t->hash, hash), err(ENOTFOUND));
 
   done_for((ret_t = ret? NULL: ret_t));
 }

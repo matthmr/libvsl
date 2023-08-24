@@ -174,6 +174,9 @@ typedef unsigned short ushort;
 typedef unsigned int   uint;
 typedef unsigned long  ulong;
 
+/**
+   Sized string
+ */
 struct string_s {
   const char* _;
   const uint  size;

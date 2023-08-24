@@ -1,8 +1,22 @@
 #include <unistd.h>
 
 #include "debug.h"
-#include "lex.h"   // also includes `symtab.h'
+
 #include "err.h"
+#include "lex.h"   // also includes `symtab.h'
+
+//// ERRORS
+
+ECODE(EIMBALANCED, ENOTALLOWED, EREAD);
+
+EMSG {
+  [EIMBALANCED] = ERR_STRING("libvsl: lexer", "imbalanced parens"),
+  [ENOTALLOWED] = ERR_STRING("libvsl: lexer",
+                             "character is not allowed in symbol"),
+  [EREAD]       = ERR_STRING("libvsl", "error while reading file"),
+};
+
+MK_ERR;
 
 // TODO: try to make these global variables stack-local (somehow)
 
@@ -200,7 +214,14 @@ yield:
   else if (STACK_PUSHED_FUN(stack->ev)) {
     DB_MSG("[ lex ] top-level yield function");
 
-    ret = lisp_stack_lex_frame(stack).slave;
+    struct lisp_ret f_ret = lisp_stack_lex_frame(stack);
+    assert(f_ret.slave == __STACK_DONE, OR_ERR());
+
+    // clear the copied memory if it popped to top-level
+    if (f_ret.master.typ & (__LISP_TYP_SEXP | __LISP_TYP_LEXP) &&
+        !(f_ret.master.m_typ & __LISP_ARG_KEEP_GLOBAL)) {
+      lisp_sexp_clear(f_ret.master.mem.sexp);
+    }
 
     DB_MSG("[ lex ] back to top-level\n"
            " -----------------------");
@@ -286,7 +307,6 @@ int lisp_parser(int fd) {
   lex.hash.w  = 1;
 
   stack.ev    = 0;
-  stack.lazy  = NULL;
   stack.paren = lex.paren;
 
   stack.lit_paren = 0;

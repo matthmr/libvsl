@@ -128,28 +128,23 @@ struct lisp_hash {
 };
 
 enum lisp_sym_typ {
+  __LISP_TYP_GEN     = -1,
+
   __LISP_TYP_NO_TYPE = 0,
 
-  __LISP_CLISP_SYM,
-  __LISP_CLISP_FUN,
+  __LISP_TYP_HASH    = BIT(0),
+  __LISP_TYP_SYM     = BIT(1),
+  __LISP_TYP_SEXP    = BIT(2),
+  __LISP_TYP_LEXP    = BIT(3),
+  __LISP_TYP_FUN     = BIT(4),
 
-  __LISP_TYP_HASH,
-
-  __LISP_TYP_SYM,
-  __LISP_TYP_SYMP,
-
-  __LISP_TYP_SEXP,
-  __LISP_TYP_LEXP,
-
-  __LISP_TYP_FUN,
-  __LISP_TYP_FUNP,
-
-  __LISP_TYP_GEN,
+  __LISP_TYP_POINTER = BIT(5),
+  __LISP_TYP_KEEP    = BIT(6),
 };
 
 #  define INFINITY (-1u)
 
-// TODO: we could make this smaller by making `dat' by a union? type for SEXPs
+// TODO: we could make this smaller by making `dat' by a union type for SEXPs
 struct lisp_sym {
   struct lisp_hash   hash; /** @hash: the hash of the symbol */
 
@@ -160,7 +155,7 @@ struct lisp_sym {
   uint            litr[2]; /** @litr: literal range: < size  */
   enum sort_mask      rep; /** @rep:  the repetition mask for `get' functions,
                                one of its fields being set means this hash is
-                               the same in that field         */
+                               the same in that field        */
 };
 
 struct lisp_symarr {
@@ -171,14 +166,6 @@ struct lisp_symarr {
 struct lisp_sym_cell {
   struct lisp_symarr   entry;
   struct lisp_sym_cell* next;
-};
-
-/**
-   Used for C LISP definitions
- */
-struct clisp_sym {
-  const char*     str; /** @str: the C-string representation of the symbol */
-  struct lisp_sym sym; /** @sym: the symbol template for the symtab        */
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -206,6 +193,7 @@ struct lisp_sort_ret {
 struct lisp_hash_ret hash_c(struct lisp_hash hash, char c);
 struct lisp_hash_ret hash_str(const char* str);
 void                 hash_done(struct lisp_hash* hash);
+bool                 hash_eq(struct lisp_hash hash_a, struct lisp_hash hash_b);
 
 // TODO: right now, these functions take the `symtab` variable globally
 struct lisp_sym* lisp_symtab_set(struct lisp_sym sym);

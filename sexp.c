@@ -1,4 +1,5 @@
 #include "debug.h"
+
 #include "stack.h" // also includes `sexp.h', `lisp.h'
 #include "err.h"   // also includes `utils.h'
 #include "mm.h"    // also includes `utils.h'
@@ -63,7 +64,8 @@ done:
    |        |   [c]  |       | 3 -> 2     | 3 -> 3   a |
    +--------+--------+-------+------------+------------+
 */
-static struct lisp_trans lisp_sexp_trans(struct lisp_trans trans, bool stack) {
+static struct lisp_trans
+lisp_sexp_trans(struct lisp_trans trans, bool stack, bool ignore_lexp) {
   register enum lisp_sexp_t    t = 0;
   register enum lisp_trans_t ret = trans.stat;
 
@@ -80,6 +82,8 @@ static struct lisp_trans lisp_sexp_trans(struct lisp_trans trans, bool stack) {
     ret &= ~(__TRANS_REBOUND_LEFT | __TRANS_REBOUND_RIGHT);
     goto rebound;
   }
+
+  //// PREAMBLE
 
 leftwise:
   t = expr_head->t;
@@ -107,8 +111,7 @@ rightwise:
       _expr_head = expr_head;
       expr_head  = expr_head->right.exp;
 
-      // we always ignore rightwise LEXP
-      if (IS_LEXP(expr_head->t)) {
+      if (ignore_lexp && IS_LEXP(expr_head->t)) {
         goto leftwise;
       }
 
@@ -178,13 +181,80 @@ rebound:
 }
 
 static struct lisp_trans lisp_sexp_yield_clear(struct lisp_trans trans) {
-  return lisp_sexp_trans(trans, false);
+  return lisp_sexp_trans(trans, false, true);
+}
+
+static struct lisp_trans lisp_sexp_yield_lit(struct lisp_trans trans) {
+  return lisp_sexp_trans(trans, true, false);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
+/**
+   Yield expressions from the SEXP tree
+ */
 struct lisp_trans lisp_sexp_yield(struct lisp_trans trans) {
-  return lisp_sexp_trans(trans, true);
+  return lisp_sexp_trans(trans, true, true);
+}
+
+struct lisp_sexp* lisp_sexp_copy(struct lisp_sexp* expr_head) {
+  register int             ret = 0;
+
+  struct lisp_sexp* _expr_head = NULL;
+  struct lisp_sexp*      _head = NULL;
+  struct lisp_trans       tret = {0};
+
+  tret.exp  = expr_head;
+  tret.stat = __TRANS_OK;
+
+  _head      = mm_alloc(sizeof(struct lisp_sexp));
+  _expr_head = _head;
+  assert(_head, OR_ERR());
+
+  _expr_head->t    = expr_head->t;
+  _expr_head->root = NULL;
+
+  do {
+    tret = lisp_sexp_yield_lit(tret);
+
+    if (tret.stat & __TRANS_LEFT_EXPR) {
+      _head = mm_alloc(sizeof(struct lisp_sexp));
+      assert(_head, OR_ERR());
+
+      _head->t = tret.exp->t;
+
+      _expr_head->left.exp = _head;
+      _head->root          = _expr_head;
+
+      _expr_head = _head;
+    }
+    else if (tret.stat & __TRANS_RIGHT_EXPR) {
+      _head = mm_alloc(sizeof(struct lisp_sexp));
+      assert(_head, OR_ERR());
+
+      _head->t = tret.exp->t;
+
+      _expr_head->right.exp = _head;
+      _head->root           = _expr_head;
+
+      _expr_head = _head;
+    }
+
+    //// SET
+
+    else if (tret.stat & (__TRANS_REBOUND_LEFT | __TRANS_REBOUND_RIGHT)) {
+      if (tret.stat & __TRANS_LEFT_SYM) {
+        _expr_head->left.exp  = tret.exp->left.exp;
+      }
+      else if (tret.stat & __TRANS_RIGHT_SYM) {
+        _expr_head->right.exp = tret.exp->right.exp;
+      }
+
+      _expr_head = _expr_head->root;
+    }
+  } while (!(tret.stat & __TRANS_DONE));
+
+  done_for((_expr_head = ret? NULL: _expr_head));
 }
 
 /**

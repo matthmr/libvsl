@@ -2,7 +2,6 @@
 #  define LOCK_SEXP
 
 #  include "symtab.h"
-#  include "lisp.h"
 
 /**
    For SEXPs and LEXPs, right shift pushes from left to right, left shift pushes
@@ -81,10 +80,13 @@ struct lisp_trans {
 ////////////////////////////////////////////////////////////////////////////////
 
 struct lisp_trans lisp_sexp_yield(struct lisp_trans trans);
+
 struct lisp_sexp* lisp_sexp_node(struct lisp_sexp*  expr_head);
 struct lisp_sexp* lisp_sexp_sym(struct lisp_sexp*   expr_head,
                                 struct lisp_hash    sym_hash);
+
 struct lisp_sexp* lisp_sexp_end(struct lisp_sexp*   expr_head);
+struct lisp_sexp* lisp_sexp_copy(struct lisp_sexp*  expr_head);
 void              lisp_sexp_clear(struct lisp_sexp* expr_head);
 
 #endif

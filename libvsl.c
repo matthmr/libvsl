@@ -7,14 +7,13 @@
 int main(void) {
   register int ret = 0;
 
+  // memory inits
   MAYBE_INIT(mm_init());
   MAYBE_INIT(lisp_symtab_init());
 
   if (frontend) {
     MAYBE_INIT(frontend());
   }
-
-  MAYBE_INIT(lisp_prim_init());
 
   return lisp_parser(STDIN_FILENO);
 

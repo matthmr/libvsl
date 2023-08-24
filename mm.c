@@ -1,6 +1,17 @@
 #include "debug.h"
+
 #include "err.h"
 #include "mm.h"
+
+//// ERRORS
+
+ECODE(EOOM);
+EMSG {[EOOM] = ERR_STRING("libvsl", "out-of-memory memory allocation")};
+MK_ERR;
+
+////////////////////////////////////////////////////////////////////////////////
+
+// TODO: there's a bug with allocation, please fix
 
 /**
    We just allocate a whole memory page. it's very rare we'll need more than
@@ -178,12 +189,8 @@ void mm_free(void* m_mem) {
   enum mm_alloc_stat  c_stat = __MM_ALLOC_FREE;
   enum mm_alloc_stat   _stat = __MM_ALLOC_FREE;
 
-#ifdef DEBUG
-  register const uint m_size = (uint)
-    (c_header->m_alloc - sizeof(struct mm_header));
-#endif
-
-  DB_FMT("[ mm ] free: size = %d", m_size);
+  DB_FMT("[ mm ] free: size = %d", (uint)
+         (c_header->m_alloc - sizeof(struct mm_header)));
 
   c_header->s_alloc &= ~__MM_ALLOC_SELF;
   c_stat             = c_header->s_alloc;
