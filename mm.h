@@ -9,27 +9,10 @@
 #    define MM_PAGESIZE (4096)
 #  endif
 
-/**
-   These interfaces are used for absolute/relative memory indexing and for
-   freeing memory
+#  define PAGES_FOR(size) \
+  (((size) / MM_PAGESIZE) + (int) (((size) % MM_PAGESIZE) != 0))
 
-   NOTE: this interface is *unique*, meaning that you should really have one of
-   it per mem-op, e.g one for each alloc
- */
-
-/** UNUSED */
-struct mm_chunk {
-  /** @t_next, @t_prev: thread pointers                                 */
-  struct mm_chunk* t_next, * t_prev;
-
-  byte* p_base; /** @p_base: base chunk pointer                         */
-
-  uint   e_idx; /** @e_idx: chunk's current element offset [0,MM_CHUNK) */
-  uint   t_idx; /** @t_idx: chunk's current thread offset               */
-};
-
-////////////////////////////////////////////////////////////////////////////////
-
+/** Header status (bitfield) */
 enum mm_alloc_stat {
   __MM_ALLOC_FREE = 0,
 
@@ -42,32 +25,52 @@ enum mm_alloc_stat {
 #  define ALLOC_NEXT(x) ((x) & __MM_ALLOC_NEXT)
 #  define ALLOC_PREV(x) ((x) & __MM_ALLOC_PREV)
 
+/** Memory chunk header */
 struct mm_header {
-  uint m_alloc; /** @m_alloc: size of the current payload */
-  uint  m_dist; /** @m_dist:  the distance from the previous
-                    header, 0 for no previous header      */
+  /* size of the current payload */
+  uint m_alloc;
 
-  /** @s_alloc: allocation status for neighbouring chunks */
+  /* the previous header */
+  struct mm_header* h_prev;
+
+  /* the delta to another managed section, from our allocation */
+  uint s_delta;
+
+  /* allocation status for self and neighbouring chunks */
   enum mm_alloc_stat s_alloc;
 };
 
-struct mm_if {
-  ulong m_size; /** @m_size: the current allocated size  */
-  ulong  m_cap; /** @m_cap:  the current memory capacity */
-  byte*  m_mem; /** @m_mem:  the current memory base     */
+/** Memory allocator interface. The layout of memory is that the first
+    `sizeof(struct mm_header)' bytes are for the header in the chunk, and the
+    rest of bytes discriminated in the header are for the payload
 
-  /** @m_header: the current header, NULL means this
-      is a virtual header                                */
-  struct mm_header* m_header;
-  /** @m_upper   the current header upper bound; does not
-      have to be allocated                               */
+    There is only one allocator per thread */
+struct mm_if {
+  /* the current allocated size, along with headers */
+  ulong m_size;
+
+  /* the current memory capacity */
+  ulong m_cap;
+
+  /* the current memory base */
+  struct mm_header* m_mem;
+
+  /* the current header upper bound. This header should always be virtual */
   struct mm_header* m_upper;
+
+  /* the current header */
+  struct mm_header* m_header;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 
-int   mm_init(void);
+/** Inits the global allocator */
+int mm_init(void);
+
+/** Allocates @m_size bytes, returning a pointer to the memory */
 void* mm_alloc(const uint m_size);
-void  mm_free(void* m_mem);
+
+/** Deallocates the memory of @m_mem */
+void mm_free(void* m_mem);
 
 #endif
