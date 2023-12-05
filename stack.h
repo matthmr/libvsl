@@ -1,62 +1,47 @@
+/** Functional stack interface */
+
 #ifndef LOCK_STACK
 #  define LOCK_STACK
 
-#  include "lisp.h"
+#  include "symtab.h"
+#  include "sexp.h"
 
-#  define LISP_FUN(x) ((lisp_fun) (x))
-
-enum lisp_stack_ev {
-  __STACK_POP      = BIT(0),
-
-  __STACK_PUSH_VAR = BIT(1),
-  __STACK_PUSH_FUN = BIT(2),
-
-  __STACK_QUOT     = BIT(3),
-};
-
-#  define STACK_QUOT(x)       ((x) & __STACK_QUOT)
-#  define STACK_POPPED(x)     ((x) & __STACK_POP)
-#  define STACK_PUSHED_FUN(x) ((x) & __STACK_PUSH_FUN)
-#  define STACK_PUSHED_VAR(x) ((x) & __STACK_PUSH_VAR)
-#  define STACK_PUSHED(x)     (STACK_PUSHED_VAR(x) | (STACK_PUSHED_FUNC(x)))
-
-////////////////////////////////////////////////////////////////////////////////
-
+/** Main stack interface */
 struct lisp_stack {
-  struct lisp_sexp* expr; /** @expr:      the SEXP pointer for general
-                              purpose SEXPs; disjoint from @lazy */
-  struct lisp_hash  hash; /** @hash:      the lexer hash         */
-  uint             paren; /** @paren:     the paren level        */
-  uint         lit_paren; /** @lit_paren: the parent paren level of a symbolic
-                              quote                              */
-  enum lisp_stack_ev  ev; /** @ev:        the stack event        */
+  /* main argument register, represented as the SEXP tree that would've been
+     formed had this function been made through the lexer, with the symbols and
+     sub-expressions resoluted down to their evaluations */
+  struct lisp_sexp* argp;
+
+  /* argument amount, counting the function name */
+  uint argv;
+
+  /* parent scope COWd with the current scope */
+  struct lisp_symtab* envp;
 };
 
-// TODO: do we need `::pop' to be part of this struct?
-struct lisp_frame {
-  struct lisp_stack stack; /** @stack: the current stack state       */
-  struct lisp_sym     sym; /** @sym:   the current function          */
-  struct lisp_ret     pop; /** @pop:   the value from a function pop */
-  struct lisp_arg*   argp; /** @argp:  the argument register         */
-  uint               argv; /** @argv:  the current argument amount; the
-                               *absolute* amount is stored in the frame
-                               function' stack instead               */
-};
-
+/** Base stack stat */
 enum lisp_stack_stat {
-  __STACK_ELEM = -3, // as in: pushed an element
-  __STACK_NEW  = -2, // as in: push a new frame
-  __STACK_DONE = -1, // as in: popped to the frame
+  __STACK_ERR  = -1,
+
   __STACK_OK   =  0,
+  __STACK_ELEM, // as in: pushed an element
+  __STACK_NEW,  // as in: push a new frame
+  __STACK_DONE, // as in: popped the current frame
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 
-struct lisp_ret lisp_stack_sexp_frame(struct lisp_stack* stack);
-struct lisp_ret lisp_eval_fun(struct lisp_arg* argp, uint argv);
+/** Evals an SEXP tree as a function */
+struct lisp_ret lisp_eval
+(struct lisp_sexp* argp, uint argv, struct lisp_symtab* envp);
 
-//// SEXP
+/** Create a new stack frame. Will yield from the SEXP @expr */
+// struct lisp_ret
+// lisp_stack_frame_sexp(struct lisp_sexp* expr, struct lisp_symtab* envp);
 
-struct lisp_ret lisp_stack_lex_frame(struct lisp_stack* stack);
+/** Create a new stack frame. Will yield from the lexer until a `pop' event is
+    sent */
+struct lisp_ret lisp_stack_frame_lex(struct lisp_symtab* envp);
 
 #endif

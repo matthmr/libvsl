@@ -1,13 +1,11 @@
 #include "debug.h"
 
-#include "err.h"
 #include "mm.h"
 
 //// ERRORS
 
 ECODE(EOOM);
 EMSG {[EOOM] = ERR_STRING("libvsl", "out of memory")};
-MK_ERR;
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -80,18 +78,18 @@ __mm_header_next_from(struct mm_header* m_header, uint m_size) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-// TODO: incomplete
 /** 'First-time' variant of `mm_alloc'. Returns the header for the tail of
     `mm_alloc' */
 static struct mm_header* mm_ftalloc(const uint m_size) {
   register int     ret = 0;
   register void* ret_t = NULL;
-  register uint t_size = m_size + sizeof(struct mm_header);
 
   struct mm_header* c_header = m_if.m_mem;
   struct mm_header* n_header = NULL;
   struct mm_header* u_header =
     __mm_header_next_from(c_header, FROM_EMPTY(m_size));
+
+  register uint t_size = m_size + sizeof(*c_header);
 
   m_if.m_size += t_size;
 
@@ -104,7 +102,7 @@ static struct mm_header* mm_ftalloc(const uint m_size) {
     if (c_brk != ((byte*)m_if.m_mem + m_if.m_cap)) {
       DB_MSG("  -> alloc: allocation clash!");
 
-      register const uint vm_alloc = m_if.m_cap - sizeof(struct mm_header);
+      register const uint vm_alloc = m_if.m_cap - sizeof(*c_header);
 
       // the memory of the first page becomes completly virtual until the
       // boundary
@@ -148,7 +146,6 @@ static struct mm_header* mm_ftalloc(const uint m_size) {
 void* mm_alloc(const uint m_size) {
   register int     ret = 0;
   register void* ret_t = NULL;
-  register uint t_size = m_size + sizeof(struct mm_header);
 
   DB_FMT("[ mm ] alloc: size = %d", m_size);
 
@@ -156,6 +153,7 @@ void* mm_alloc(const uint m_size) {
   struct mm_header* p_header = NULL;
   struct mm_header* n_header = NULL;
 
+  register uint t_size = m_size + sizeof(*c_header);
   enum mm_alloc_stat  c_stat = __MM_ALLOC_FREE;
 
   if (!c_header) {

@@ -2,314 +2,214 @@
 
 #include "debug.h"
 
-#include "err.h"
-#include "lex.h"   // also includes `symtab.h'
+#include "lex.h"
 
 //// ERRORS
 
-ECODE(EIMBALANCED, ENOTALLOWED, EREAD);
+ECODE(EIMBALANCED, ENOTALLOWED, ETOOBIG, EREAD);
 
 EMSG {
   [EIMBALANCED] = ERR_STRING("libvsl: lexer", "imbalanced parens"),
   [ENOTALLOWED] = ERR_STRING("libvsl: lexer",
                              "character is not allowed in symbol"),
+  [ETOOBIG]     = ERR_STRING("libvsl: lexer",
+                             "symbol is too big"),
   [EREAD]       = ERR_STRING("libvsl", "error while reading file"),
 };
 
-MK_ERR;
+static char _iobuf[IOBLOCK] = {0};
+static char _symbuf[LISP_SYM_MAX_LEN] = {0};
 
-// TODO: try to make these global variables stack-local (somehow)
+struct lisp_lex lex = {
+  .symbuf = {
+    .str = _symbuf,
+    .idx = 0,
+  },
+  .iobuf  = {
+    .str = _iobuf,
+    .idx = 0,
+  },
+  .iobuf_size = 0,
 
-static struct lisp_lex lex = {0};
-
-static int   iofd = 0;
-static char iobuf[IOBLOCK];
+  .paren  = 0,
+  .ev     = 0,
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 
-/**
-   Set @ev as an event for the lexer
- */
-static inline enum lisp_lex_stat lisp_lex_ev(enum lisp_lex_ev ev) {
-  register enum lisp_lex_stat ret = __LEX_OK;
-
+/** Set @ev as an event for the lexer */
+static inline void lisp_lex_ev(enum lisp_lex_ev ev) {
   if (LEX_SYMBOL_OUT(ev)) {
-    lex.ev &= ~__LISP_EV_SYMBOL_IN;
-    lex.ev |= __LISP_EV_SYMBOL_OUT;
+    lex.ev &= ~__LEX_EV_SYMBOL_IN;
+    lex.ev |= ev;
   }
 
   /////
 
   else if (LEX_PAREN_IN(ev)) {
-    lex.ev |= __LISP_EV_PAREN_IN;
+    lex.ev |= ev;
 
-    // a( -> SYMBOL_OUT, PAREN_IN; the first takes precedence. `::cb_idx' will
-    // trigger PAREN_IN again
+    // a( -> SYMBOL_OUT, PAREN_IN; the first takes precedence
     if (LEX_SYMBOL_IN(lex.ev)) {
-      lisp_lex_ev(__LISP_EV_SYMBOL_OUT);
+      lisp_lex_ev(__LEX_EV_SYMBOL_OUT);
     }
   }
 
   /////
 
   else if (LEX_PAREN_OUT(ev)) {
-    lex.ev |= __LISP_EV_PAREN_OUT;
+    lex.ev |= ev;
 
     // a) -> SYMBOL_OUT, PAREN_OUT; the first takes precedence
     if (LEX_SYMBOL_IN(lex.ev)) {
-      lisp_lex_ev(__LISP_EV_SYMBOL_OUT);
-    }
-
-    // (...)) -> EIMBALANCED
-    if (lex.paren == 0) {
-      defer(err(EIMBALANCED));
+      lisp_lex_ev(__LEX_EV_SYMBOL_OUT);
     }
   }
-
-  done_for(ret);
 }
 
-/**
-   Issue the 'whitespace' event
- */
-static inline enum lisp_lex_stat lisp_lex_whitespace(void) {
-  if (LEX_SYMBOL_IN(lex.ev)) {
-    return lisp_lex_ev(__LISP_EV_SYMBOL_OUT);
-  }
-
-  return __LEX_OK;
-}
-
-/**
-   Handle hash character @c as a character for a symbol
- */
+/** Handle hash character @c as a character for a symbol */
 static inline enum lisp_lex_stat lisp_lex_c(char c) {
   register enum lisp_lex_stat ret = __LEX_OK;
 
-  lex.ev |= __LISP_EV_SYMBOL_IN;
+  lex.ev |= __LEX_EV_SYMBOL_IN;
 
-  if (!__LISP_ALLOWED_IN_NAME(c)) {
-    defer_as(err(ENOTALLOWED));
-  }
+  assert(__LISP_ALLOWED_IN_NAME(c), err(ENOTALLOWED));
+  assert(lex.symbuf.idx < LISP_SYM_MAX_LEN, err(ETOOBIG));
 
-  struct lisp_hash_ret hret = hash_c(lex.hash, c);
-  lex.hash = hret.master;
-  ret      = hret.slave;
+  lex.symbuf.str[lex.symbuf.idx] = c;
+  lex.symbuf.idx++;
 
-  DB_FMT("[ lex ] symbol char (%c) [%d]", c, HASH_IDX(lex.hash));
+  DB_FMT("[ lex ] symbol char (%c)", c);
 
   done_for(ret);
 }
 
-/**
-   Handle character @c for the lexer, sending events if it needs to
- */
-static inline enum lisp_lex_stat lisp_lex_handle_c(char c) {
+/** Handle character @c for the lexer, setting up events */
+static inline void lisp_lex_handle_c(char c) {
   switch (c) {
-  case __LISP_C_PAREN_OPEN:
-    return lisp_lex_ev(__LISP_EV_PAREN_IN);
-  case __LISP_C_PAREN_CLOSE:
-    return lisp_lex_ev(__LISP_EV_PAREN_OUT);
-  case __LISP_C_WHITESPACE:
-    return lisp_lex_whitespace();
+
+  // `(', `)'
+  case __LEX_C_PAREN_OPEN:
+    lisp_lex_ev(__LEX_EV_PAREN_IN);
+    break;
+  case __LEX_C_PAREN_CLOSE:
+    lisp_lex_ev(__LEX_EV_PAREN_OUT);
+    break;
+
+  // ' '...
+  case __LEX_C_WHITESPACE:
+    if (LEX_SYMBOL_IN(lex.ev)) {
+      lisp_lex_ev(__LEX_EV_SYMBOL_OUT);
+    }
+
+    break;
+
+  // everything else: part of a symbol
   default:
-    return lisp_lex_c(c);
+    lisp_lex_c(c);
+    break;
   }
 }
 
-/**
-   Handle lex event, setting the current stack state for the stack frame
- */
-static void
-lisp_lex_handle_ev(enum lisp_lex_ev lev, struct lisp_stack* stack,
-                   uint cb_idx) {
-  lex.cb_idx = (cb_idx + 1);
+/** Handle lex event, setting up the return type and the lex state */
+static enum lisp_lex_stat
+lisp_lex_handle_ev(enum lisp_lex_ev lev, uint cb_idx) {
+  register enum lisp_lex_stat ret = __LEX_OK;
+
+  lex.iobuf.idx = (cb_idx + 1);
 
   if (LEX_SYMBOL_OUT(lev)) {
-    DB_MSG("[ lex ] handle: SYM");
+    DB_MSG("[ lex ] emit: sym");
 
-    lex.ev    &= ~__LISP_EV_SYMBOL_OUT;
-    stack->ev |= __STACK_PUSH_VAR;
-
+    // we preemptively shift the cursor up, but if we're tangled, shifting it
+    // back down will make it trigger the next time we try to yield
     if (LEX_TANGLE(lev)) {
-      --lex.cb_idx;
+      --lex.iobuf.idx;
       lex.ev &= ~__LEX_TANGLE;
     }
-
-    stack->hash = lex.hash;
-    hash_done(&lex.hash);
   }
 
   /////
 
   else if (LEX_PAREN_IN(lev)) {
-    DB_MSG("[ lex ] handle: `('");
+    DB_MSG("[ lex ] emit: start expr");
 
-    lex.ev    &= ~__LISP_EV_PAREN_IN;
-    stack->ev |= __STACK_PUSH_FUN;
+    lex.paren++;
 
-    ++lex.paren;
-    DB_FMT("  -> lex: ++paren: %d", lex.paren);
-
-    stack->paren = lex.paren;
+    DB_FMT("  -> lex: paren++: %d", lex.paren);
   }
 
   /////
 
   else if (LEX_PAREN_OUT(lev)) {
-    DB_MSG("[ lex ] handle: `)'");
+    // (...)) -> EIMBALANCED
+    assert(lex.paren > 0, err(EIMBALANCED));
 
-    lex.ev    &= ~__LISP_EV_PAREN_OUT;
-    stack->ev |= __STACK_POP;
+    DB_MSG("[ lex ] emit: end expr");
 
     --lex.paren;
+
     DB_FMT("  -> lex: --paren: %d", lex.paren);
-
-    stack->paren = lex.paren;
   }
-}
-
-/**
-   Feed the lexer with @IOBLOCK bytes from fd @iofd, to buffer @iobuf
- */
-static int lisp_lex_feed(void) {
-  int ret  = 0;
-  int size = read(iofd, iobuf, IOBLOCK);
-
-  assert(size != -1, err(EREAD));
-
-  DB_FMT("[ lex ] fed %d bytes", size);
-
-  lex.size   = size;
-  lex.cb_idx = 0;
-
-  done_for(ret);
-}
-
-/**
-   Base parser: yield one expression then defer to the stack
- */
-static int lisp_lex_parser(struct lisp_stack* stack) {
-  register int ret = lisp_lex_feed();
-
-  assert(ret == 0, OR_ERR());
-
-yield:
-  ret = lisp_lex_yield(stack);
-
-  // no error, no input: exit
-  assert(ret != __LEX_NO_INPUT, 0);
-  assert(ret == __LEX_OK, OR_ERR());
-
-  // push variable (top level)
-  if (STACK_PUSHED_VAR(stack->ev)) {
-    DB_MSG("TODO: implement top-level symbol resolution\n"
-           " -----------------------");
-
-    stack->ev &= ~__STACK_PUSH_VAR;
-    ret        = __STACK_OK;
-  }
-
-  // push function
-  else if (STACK_PUSHED_FUN(stack->ev)) {
-    DB_MSG("[ lex ] top-level yield function");
-
-    struct lisp_ret f_ret = lisp_stack_lex_frame(stack);
-    assert(f_ret.slave == __STACK_DONE, OR_ERR());
-
-    // clear the copied memory if it popped to top-level
-    if (f_ret.master.typ & (__LISP_TYP_SEXP | __LISP_TYP_LEXP) &&
-        !(f_ret.master.m_typ & __LISP_ARG_KEEP_GLOBAL)) {
-      lisp_sexp_clear(f_ret.master.mem.sexp);
-    }
-
-    DB_MSG("[ lex ] back to top-level\n"
-           " -----------------------");
-  }
-
-  // give the parent error precedence over possible `EIMBALANCED'
-  assert(ret == __STACK_OK || ret == __STACK_DONE, OR_ERR());
-  assert(lex.paren == 0, err(EIMBALANCED));
-
-  ret       = 0;
-  stack->ev = 0;
-  lex.ev    = 0;
-
-  goto yield;
 
   done_for(ret);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
-/**
-   Yield expressions from the lexer
- */
-int lisp_lex_yield(struct lisp_stack* stack) {
-  register int ret = 0;
-  register enum lisp_lex_stat lret = __LEX_OK;
+int lisp_lex_feed(void) {
+  int ret  = 0;
+  int size = read(IOFD, lex.iobuf.str, IOBLOCK);
 
-  uint size = 0;
+  assert(size != -1, err(EREAD));
+
+  DB_FMT("[ lex ] fed %d bytes", size);
+
+  lex.iobuf_size = size;
+  lex.iobuf.idx  = 0;
+
+  done_for(ret);
+}
+
+int lisp_lex_yield(void) {
+  register int   ret = __LEX_OK;
+  register uint size = 0;
 
   enum lisp_lex_ev ev = lex.ev;
 
 feed:
-  size = lex.size;
+  size = lex.iobuf_size;
 
-  for (uint i = lex.cb_idx; i < size; ++i) {
-    lret = lisp_lex_handle_c(iobuf[i]);
-    assert(lret == __LEX_OK, OR_ERR());
+  for (uint ev_i = lex.iobuf.idx; ev_i < size; ev_i++) {
+    lisp_lex_handle_c(lex.iobuf.str[ev_i]);
 
     ev = lex.ev;
 
     // avoid calling this function for *every* character
-    if (!LEX_SYMBOL_IN(ev) && ev) {
-      lisp_lex_handle_ev(ev, stack, i);
-      defer_as(__LEX_OK);
+    if (ev && !LEX_SYMBOL_IN(ev)) {
+      return lisp_lex_handle_ev(ev, ev_i);
     }
   }
 
   // fed 0 bytes: set any current symbol as finished, then defer as `no-input'
   if (size == 0) {
     if (LEX_SYMBOL_IN(lex.ev)) {
-      lret = lisp_lex_ev(__LISP_EV_SYMBOL_OUT);
-      assert(lret == __LEX_OK, OR_ERR());
+      lisp_lex_ev(__LEX_EV_SYMBOL_OUT);
 
-      ev   = lex.ev;
-      lisp_lex_handle_ev(ev, stack, (lex.cb_idx - 1));
+      return lisp_lex_handle_ev(lex.ev, lex.iobuf.idx);
     }
 
-    assert(lex.paren == 0, err(EIMBALANCED));
-
-    // no error but also nothing else in the buffer: ask to stop
-    defer_as(__LEX_NO_INPUT);
+    // top-level EOF with empty buffer: ask to stop
+    if (!lex.paren) {
+      defer_as(__LEX_NO_INPUT);
+    }
   }
 
+  // fell through the lexer: feed again, go back
   ret = lisp_lex_feed();
   assert(ret == 0, OR_ERR());
 
   goto feed;
 
   done_for(ret);
-}
-
-/**
-   Wrap the base lex parser (lisp_lex_parser) and define the stack
- */
-int lisp_parser(int fd) {
-  iofd = fd;
-
-  struct lisp_stack stack = {0};
-
-  lex.paren   = 0;
-  lex.ev      = 0;
-
-  lex.hash.w  = 1;
-
-  stack.ev    = 0;
-  stack.paren = lex.paren;
-
-  stack.lit_paren = 0;
-
-  return lisp_lex_parser(&stack);
 }
