@@ -18,9 +18,9 @@ using the API to make a LISP with LIBVSL.
 ## Motive
 
 This is the standalone version of the step 0 of the bootstrapping process of
-GPLD. As such, the LISPs you can make with this library are pretty limited in
-scope and syntax, as we want something really simple to parse (the lexer doesn't
-even use regexes!)
+[GPLD](https://github.com/matthmr/gpld). As such, the LISPs you can make with
+this library are pretty limited in scope and syntax, as we want something really
+simple to parse (the lexer doesn't even use regexes!)
 
 # License
 

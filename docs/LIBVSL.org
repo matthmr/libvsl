@@ -1,421 +1,202 @@
 * LIBVSL
 
-This documents the primitives built-in for the turing complete implementation of
-LIBVSL as well as the applications of LIBVSL frontend implementations.
-
-** LIBVSL primitives
-
-This repository includes a built-in, optional frontend called PRIMVSL (primitive
-VSL). PRIMVSL is a frontend implementation of LIBVSL that defines functions and
-symbols to be used by default. PRIMVSL can be excluded from LIBVSL if you want
-to build your own implementation. See the [[* Implementing LIBVSL][Implementing
-LIBVSL]] chapter for more info.
-
-# TODO: does `set' *copy* or *reference* memory?
-
-*** PRIMVSL functions
-
-- function: =set=
-  - form: =(set <NAME> <EXPR>)=
-  - sets =<NAME>= to the value of =<EXPR>=. =<NAME>= is a literal symbol.
-  - example:
-    #+begin_src lisp
-    (set true t)
-    (set false nil)
-    (set booleans (quot (true false)))
-    #+end_src
-
-- function: =del=
-  - form: =(del <NAME>)=
-  - unbounds =<NAME>=. Unbounding means the symbol that had the hash of =<NAME>=
-  is taken off the symbol table. =<NAME>= is a symbol.
-  - example:
-    #+begin_src lisp
-    (set x nil)
-    (del x)
-
-    (fun something ())
-    (del something)
-    #+end_src
-
-- function: =fun=
-  - form: =(fun <NAME> (<ARGS>) <BODY>...)=
-  - sets =<NAME>= to be the head of the tree of =<BODY>=, substituting the
-    symbols by the values positionally matched by the symbols in =<ARGS>=.
-    =<NAME>= is a literal symbol, =<ARGS>= is a list of symbols and =<BODY>= is
-    multiple expressions.
-  - example:
-    #+begin_src lisp
-    (fun boolean? (x) (return (if (eq x t) t (eq x nil))))
-    (fun is-empty-sexp-nil? (expr) (return (eq () nil)))
-    (fun type-of-head (e) (return (type (head e))))
-    #+end_src
-
-- function: =lam=
-  - form: =(lam (<ARGS>) <EXPR>)=
-  - returns a lambda function that returns =<EXPR>=. =<ARGS>= is a list of
-    symbols.
-  - example:
-    #+begin_src lisp
-    (filter list (lam (e) (is-even e)))
-    (set append-prepend-nil (lam (e) (quot nil e nil)))
-    (set append-prepend-t (lam (e) (quot t e t)))
-    #+end_src
-
-- function: =eval=
-  - form: =(eval <EXPR>)=
-  - evals =<EXPR>=. If the first element of =<EXPR>= is =()=, then eval will
-    recurse, creating a new tree with elements of the same recusrion level as
-    sibblings in the tree (similar to =`(a ,b)= in other LISPs). =<EXPR>= is
-    quoted.
-  - example:
-    #+begin_src lisp
-    (eval (quot nil)) -> nil
-    (eval nil) -> nil
-    (eval (() (quot a) nil)) -> (a nil)
-    #+end_src
-
-- function: =quot=
-  - form: =(quot <EXPR>)=
-  - "quotes" =<EXPR>=. Here, a quote just means take the SEXP tree and store it
-    as data, instead of evaluating.
-  - example:
-    #+begin_src lisp
-    (quot x) -> x
-    (quot (quot x)) -> (quot x)
-    (quot ()) -> ()
-    #+end_src
-
-- function: =lexp=
-  - form: =(lexp <TREE>)=
-  - makes =<EXPR>= be an LEXP, in-place.
-  - example:
-    #+begin_src lisp
-    (set tree (quot (a b))) -> (a b)
-
-    (fun list-append (tree elem)
-       (set old-tree-right (right-child tree))
-       (lexp old-tree-right)
-       (set-left-child (right-child tree) (left-child old-tree-right))
-       (set-right-child (right-child tree) (quot elem))
-       (return tree))
-
-    (list-append tree c) -> (a b c)
-    (list-append (list-append tree c) d) -> (a b c d)
-    #+end_src
-
-- function: =if=
-  - form: =(if <COND> <TRUE-EXPR> <FALSE-EXPR>?)=
-  - evals =<COND>=, if non-nil, then evals =<TRUE-EXPR>= then exit. If nil, then
-    evals =<FALSE-EXPR>= then exit. =<FALSE-EXPR>= is optional. If nil and no
-    =<FALSE-EXPR>= exists, then returns =nil=.
-  - example:
-    #+begin_src lisp
-    (if (not (eq nil ())) @sym) -> ni
-    (if (eq nil (head (quot (nil)))) (list nil) nil) -> (nil)
-    (if (quot t) nil t) -> nil
-    #+end_src
-
-- function: =eq=
-  - form =(eq <EXPR1> <EXPR2>)=
-  - returns =t= if =<EXPR1>= is "equal" to =<EXPR2>=. Equality here depends on
-    the type of the return value of the expressions. As LIBVSL, the base for
-    PREVSL, is a strictly symbolic LISP, equality either means:
-    1. the symbols are the same; have the same hash; point to the same address
-    2. the SEXP trees are the same; they have the same size and each element of
-       it respects =1.= =eq= will return =nil= if the expressions have different
-       types.
-  - example:
-    #+begin_src lisp
-    (eq () nil) -> t
-    (eq (quot ()) nil) -> nil ; different types: (eq SEXP SYM)
-    (eq eq eq) -> t ; same symbol
-    #+end_src
-
-- function: =not=
-  - form: =(not <EXPR>)=
-  - negates the boolean value of =<EXPR>=. The boolean value of =<EXPR>= will
-    follow that anything that's not =nil= (or bound to =nil=) is =t=.
-  - example:
-    #+begin_src lisp
-    (not (quot nil)) -> nil
-    (not (quot (some-tree))) -> nil
-    (not nil) -> t
-    #+end_src
-
-- function: =block=
-  - form: =(block <EXPR>...)=
-  - evals as many =<EXPR>=s in it as it can. This is used to "bypass" the
-    one-expr limit of functions like =if=.
-  - example:
-    #+begin_src lisp
-    (if (eq @sexp (type ()))
-     (block
-       (do-something)
-       (do-something-else)))
-    #+end_src
-
-- function: =while=
-  - form: =(while <COND> <EXPR>...)=
-  - evaluates all expressions in =<EXPR>= while =<COND>= is boolean =t=.
-  - example:
-    #+begin_src lisp
-    (while t (do-something-forever))
-    (while (not thing) (do-thing-for thing) (do-another-thing-for thing))
-    (while nil (never-execute))
-    #+end_src
-
-- function: =break=
-  - form: =(break)=
-  - breaks out of the closest =while= scope.
-  - example:
-    #+begin_src lisp
-       (while t (break))
-       (while (some-function)
-         (if some-condition
-           (break)))
-       (while t
-         (if (not (head some-list))
-             (break)))
-    #+end_src
-
-- function: =continue=
-  - form: =(continue)=
-  - goes to the next iteration in a =while= block.
-  - example:
-    #+begin_src lisp
-    (while t (continue))
-    (while some-condition
-      (if (some-other-condition)
-        (continue)))
-    (while t
-      (if (not (head some-list))
-        (continue)
-        (break)))
-    #+end_src
-
-- function: =return=
-  - form: =(return <EXPR>)=
-  - returns =<EXPR>= as the return value of a function.
-  - example:
-    #+begin_src lisp
-    (fun foo ()
-      (return (quot bar)))
-    (fun hello ()
-      (return (quot world)))
-    (fun sym-eq (a b)
-      (return (eq
-               (if (eq (type a) @sexp) nil a)
-               (if (eq (type b) @sexp) nil b))))
-    #+end_src
-
-- function: =goto=/=label=
-  - form:
-    + =(goto <LABEL>)=
-      + goes to =<LABEL>=. If it doesn't exist, then do nothing. =<LABEL>=
-        /must/ be declared **before** the =goto= function. Other implementations
-        of LIBVSL, such as bootstrapped ones, may not enforce this. However,
-        'raw' LIBVSL does.
-    + =(label <NAME>)=
-      + sets =<NAME>= as a label.
-  - example
-    #+begin_src lisp
-    (while (foo)
-      (do-something-before-bar)
-      (label bar)
-      (do-something)
-      (if (some-condition)
-          (goto bar)
-          (if (some-breaking-condition) (break))))
-    #+end_src
-
-- function: =cond=
-  - form: =(cond (<COND> <EXPR>)...)=
-  - evaluates the expressions of the form =(<COND> <EXPR>)= where =<EXPR>= is a
-    single expression. If the return value of =<COND>= is boolean =t=, then
-    execute =<EXPR>= and exit the =cond= function.
-  - example:
-    #+begin_src lisp
-      (cond
-        ((eq @sym ()) (quot (foo bar)))
-        ((foo) bar)
-    #+end_src
-
-- function: =left-child=/=right-child=
-  - form: =(left-child <EXPR>)=/=(right-child <EXPR>)=
-  - gets the left/right child of =<EXPR>= as a reference. Returns nil if it
-    doesn't exist.
-  - example:
-    #+begin_src lisp
-      (left-child (quot (a b c))) -> a
-      (right-child (quot (a b c))) -> b
-
-      (left-child (quot ((a) ((b) c) d))) -> (a)
-      (right-child (quot ((a) ((b) c) d))) -> ((b) c)
-
-      (left-child nil) -> nil
-      (right-cihld nil) -> nil
-    #+end_src
-
-- function: =parent=
-  - form: =(parent <EXPR>)=
-  - gets the paren of =<EXPR>= as a reference. Returns nil if it doesn't exist.
-  - example:
-    #+begin_src lisp
-      (set tree (quot (a b c)))
-      (set tree (right-child tree)) -> b
-
-      (paren tree) -> a
-    #+end_src
-
-- function: =set-left-child=/=set-right-child=
-  - form: =(set-left-child <TREE> <EXPR>)=/=(set-right-child <TREE> <EXPR>)=
-  - sets the left/right child of =<TREE>= as =<EXPR>=. Will silently fail if
-    =<TREE>= is not a SEXP tree.
-  - example:
-    #+begin_src lisp
-    (set tree (quot ())) -> ()
-    (set-left-child tree (quot a)) -> (a)
-    (set-right-child tree (quot (b))) -> (a (b))
-    (set-left-child tree nil) -> tree -> (nil (b))
-    #+end_src
-
-- function: =set-parent=
-  - form: =(set-parent <TREE> <EXPR>)=
-  - sets the parent of =<TREE>= as =<EXPR>=. Will silently fail if =<TREE>= is
-    not a SEXP tree.
-  - example:
-    #+begin_src lisp
-    (set tree (quot (b))) -> (b)
-
-    (set tree2 (set-parent tree a)) -> (a b)
-
-    (set-parent tree2 c) -> (c (a b))
-    #+end_src
-
-- function: =type=
-  - form: =(type <EXPR>)=
-  - returns the type of the expression =<EXPR>= as one of these types:
-    1. =@sym=
-    2. =@sexp=
-    3. =@lexp=
-  - example:
-    #+begin_src lisp
-    (type ()) -> @sym
-    (type nil) -> @sym
-    (type (quot ())) -> @sexp
-    #+end_src
-
-*** PRIMVSL symbols
-
-- symbol: =t=
-  - primitive true boolean
-
-- symbol: =nil=
-  - primitive false boolean
+This documents the API for LIBVSL, and how to use it to make a (very simple)
+LISP.
 
 ** Implementing LIBVSL
 
 To create a LISP using LIBVSL, you'll need /at least one/ C source file,
-including the =libvsl.h= header with either of the macros =LIBVSL_FRONTEND= or
-=LIBVSL_FRONTEND_STUB= used at least once, and link it to =libvsl.a= with the
-=-lvsl= or equivalent compiler option set on your compiler of choice.
+including the =libvsl.h= header and linking it to the =libvsl.a= library.
 
-If using a stub implementation of LIBVSL, you can use the =LIBVSL_FRONTEND_STUB=
-macro with no arguments, then compile it, as the =main= function is located in
-=libvsl.c=. You don't define the =main= entry point, just the =frontend=
-function that gets run in =main= before passing control to the lexer.
+It's imperative that you include the =libvsl.h= header *once* per
+implementation, and only on the front-facing part of yours. If you need specific
+functionality, include some of the other header files in this repository (take a
+look around!).
 
-*** Stub implementation
+Run =libvsl_init()= to init the framework. The =libvsl_init()= inits
+memory-related objects; any and all further operations with LISP objects *must*
+be made after this function executes.
 
-The stub implementation of LIBVSL is turing complete, so /in theory/ you could
-just create a stub file and use it as a LISP. However it's too cumbersome and
-hard to use, as the only lexical elements defined in the lexer are =(= and =)=
-as expression delimiters, with no useful constructs like ='= for quoting.
-Nevertheless, you can pull the =dev= branch and run the following command:
+LIBVSL is a *purely symbolic LISP*, meaning the only things a user can define
+explicitly are pure symbols and expressions; meaning no strings, integers,
+floats or any other literals. LIBVSL itself does not provide any primitive
+symbols, only the framework to process them. If you want some symbols with
+defined value, you'll have to define them after you init the framework.
 
-#+begin_src sh
-$ git show dev:dev/sh/dev-on-branch.sh | sh -
-#+end_src
+*** Symbol tables
 
-This should create a =dev/= directory and inside of it, a =dev/sh/gen-lisp.sh=
-shell script. After configuring with =./configure=, you can run this script and
-it will use a file in =dev/c/lisp.c= as a LIBVSL stub to generate an executable,
-=./lisp=.
+LIBVSL comes with an interface for the programmer (and user) to define top-level
+symbols.
 
-*** Frontend implementation
+For the programmer defining symbol for top-level, they'll need to define an
+array using the =CLISP_TAB(table_name)= macro. Each element of the array is
+defined using the =CLISP_DEF(symbol_name, symbol_obj)= macro.
 
-However, if you want to build your own implementation either on top of PRIMVSL
-or substituting PRIMVSL, along with the instructions above, you'll have to:
+By the nature of LIBVSL, there are no 'primitive types' apart from symbols and
+expressions. Programmatically this means there's no =int=, =float= or =char*=
+fields: everything is stored in a separate memory pool, and the symbol only
+holds a pointer to it, placing the burden on the programmer to type-cast the
+data of the symbol.
 
-1. define one or more arrays of type =struct clisp_sym= using **only one** of
-   this macros:
-   1. =CLISP_PRIM_DECLFUN(name, function, lower_arg, upper_arg, lower_lit,
-      upper_lit)=: declare a LISP function
-     - =name=: name of the function as used in LISP code
-     - =function=: name of the function as used in C code
-     - =lower_arg=: lower bound of arguments for this function
-     - =upper_arg=: upper bound of arguments for this function
-     - =lower_lit=: lower bound of literal arguments for this function
-     - =upper_lit=: upper bound of literal arguments for this function
-     - end the definition with =CLISP_PRIM_DECLFUN_END()=
-   2. =CLISP_PRIM_DECLSYM(name, value)=: declare a LISP symbol
-     - =name=: name of the function as used in LISP code
-     - =value=: generic =void= pointer to the data of the symbol
-     - end the definition with =CLISP_PRIM_DECLSYM_END()=
-2. define your functions declared to be used in the `function` argument on
-   `CLISP_PRIM_DECLFUN` with the macro `CLISP_PRIM_DEFUN`. These functions are
-   of the type `struct lisp_ret (*) (struct mm_if argp, uint argv)`.
-3. define an /array iterator/ with the type =struct clisp_tab= containing all
-   your arrays defined prior, with =CLISP_PRIM_DECLTAB_END= as the terminating
-   element.
-   - each array element should be wrapped arround the =CLISP_PRIM_DECLTAB=
-     macro, with the name of the element as the first argument, and the type of
-     the each element of the element array as the second argument.
-4. call the function =lisp_prim_setlocal= with a pointer to your array iterator
-   as the first argument, and a boolean as the second argument
-   - this boolean will decide if PRIMVSL should be included as well. Set it to
-     true if you want to implement your functions on top of PRIMVSL. Set if to
-     false if you want that your functions replace PRIMVSL.
-5. wrap the call to =lisp_prim_setlocal=, along with whatever else you want to
-   initialize, into a function with the type =int (*) (void)=, then pass the
-   name of this function to the macro =LIBVSL_FRONTEND=. Use this =int= return
-   value to signal that something inside your function has errored; as a error
-   code. It should be set to zero if everything has succeeded, non-zero
-   otherwise.
+It's recommended, if you want a symbol to hold a type not defined in =union
+lisp_obj_m= (see =lisp.h=), for you to use the =struct lisp_foreign= interface
+(see =lisp.h=).
 
-**NOTE**: each array can only contain **one** type of these macros. So you can
-only have an array full of functions, or full of symbols, without mixing the
-two.
+LIBVSL comes with no top-level table by default, so you'll need to define your
+own in the same module as you're defining your symbols. For the top-level,
+declare a variable with type =struct lisp_symtab*= and initialize it to =NULL=.
+Then, to initialize the symbols defined in your table, run the function
+=clisp_init(<your-top-level>, <your-table>, <your-table-size>)=, and assign the
+return value (after asserting it's not =NULL=) to =<your-top-level>=. Calling
+=clisp_init= with the first argument as =NULL= initializes a new table with the
+values of =your-table= defined in them. If the first argument is not =NULL=,
+it'll assign them alongside the original symbols of the table, overwriting if
+needed.
 
 **** LIBVSL functions
 
-All of LIBVSL's functions are of the type =struct lisp_ret (*) (struct lisp_arg*
-argp, uint argv)=. Functions are declared and defined with the
-=CLISP_PRIM_DEFUN= CPP macro. Like =libc='s =main=, the name of the function is
-passed as the first argument of the function, =argp[0]=. If you want to access
-its arguments, they start at =argp[1]=.
-
-# TODO: lazy evaluation
-
-A standard LIBVSL function might look like:
+To define LIBVSL top-level functions it's recommended you use the
+=CLISP_DEFUN(function_name)= macro as the body of a normal C function
+definition, like:
 
 #+begin_src c
-  CLISP_PRIM_DEFUN(foo) {
-      struct lisp_ret ret = {0};
-
-      for (uint i = 1; i < argv; ++i) {
-         // do something
-      }
-
-      return ret;
+  CLISP_DEFUN(foo) {
+    ...
   }
 #+end_src
 
-**** Implementation example
+All of LIBVSL's functions are of the type =lisp_fun= (see =lisp.h=).
+
+*As for its arguments*:
+
+The functions follow an approach similar to =libc='s =main=, where we have an
+argument pointer =argp= (where the function itself is the first argument), an
+argument counter =argv= (where the function itself is the first element), and an
+environment pointer =envp=, which corresponds to the function's outer scope.
+
+1. =argp=: argp is of the type =struct lisp_sexp*=, where the SEXP is the
+   'proper' function expression: this means the expression gotten when every
+   argument is evaluated down. For instance:
+   #+begin_src lisp
+     (foo (+ 1 2) (* 3 4)) ->
+
+     (foo 3 12)
+     ; ^ argp is the whole expression
+   #+end_src
+2. =argv=: argv is not stricly needed. It's only used to prevent always having
+   to iterate the tree to find the number of arguments. If the top-level is
+   inited, the stack functions will always count the number of current elements
+   before defering to the proper function
+3. =envp=: envp is of the type =struct lisp_symtab*=. It contains the current
+   scope for the function
+
+To iterate through the arguments of your function, use the
+=FOR_ARG(arg, args)= macro.
+
+An usage might look like:
+
+#+begin_src c
+  CLISP_DEFUN(foo) {
+    struct lisp_ret_t ret_t = {0};
+    register int        ret = 0;
+    struct lisp_arg_t  args = {0};
+
+    FOR_ARG(arg, args) {
+      // process `arg'...
+    }
+
+    done_for((ret_t.slave = (ret? __LISP_ERR: __LISP_OK), ret_t));
+  }
+#+end_src
+
+*As for the return type*:
+
+The functions return the type =struct lisp_ret= (see =lisp.h=), which have
+a /master-slave/ type:
+
+1. =master=: =struct lisp_obj=: The 'main' return type of the function
+1. =slave=: =enum lisp_ret_t=: Generic return status. Mainly used for interop
+   with other internals of LIBVSL. It should return =__LISP_OK= except for
+   LIBVSL-related errors with the =__LISP_ERR= status. For example:
+   #+begin_src c
+     CLISP_DEFUN(foo) {
+       struct lisp_ret_t ret_t = {0};
+       register int        ret = 0;
+
+       long* mem = mm_alloc(sizeof(long));
+
+       // If `mm_alloc' wasn't able to allocate memory, we return `__LISP_ERR'.
+       // If your function has some other form of 'error', you should still
+       // return `__LISP_OK' and return your error in some wrapper in `master':
+       // reserve `__LISP_ERR' for internals like these
+       assert(mem, OR_ERR());
+       mm_free(mem);
+
+       done_for((ret_t.slave = (ret? __LISP_ERR: __LISP_OK), ret_t));
+     }
+   #+end_src
+
+**** LIBVSL objects
+
+To define LIBVSL top-level objects for the =CLISP_DEF= macro, it's recommended
+you use the =CLISP_OBJ(object_type, object_assign)= macro. As for
+=object_assign=, it should have the syntax of a C field assignment
+(=<field-name> = <field-value>=), where =<field-name>= is any of the fields
+efined in =union lisp_obj_m _=, in =lisp.h=.
+
+This macro is really only useful for defining objects with the data being of
+some of the primitive types (symbols, SEXPs, Cfunctions, ...). For more
+*generic* data, use the =CLISP_OBJ_GEN(object_type, object_memory)= macro. The
+data will be wrapped in the =struct lisp_foreign= structure.
+
+The type of primitive objects is defined in the =enum lisp_obj_t=, in =lisp.h=.
+
+An usage might look like:
+
+#+begin_src c
+  struct lisp_sexp* some_sexp = NULL;
+  int some_int = 2;
+
+  enum my_types {__LISP_MY_NIL = 0, __LISP_MY_INT};
+
+  CLISP_TAB(my_tab) {
+    CLISP_DEF("my_some_sexp", CLISP_OBJ(__LISP_OBJ_SEXP, exp = some_sexp),
+    CLISP_DEF("my_some_int", CLISP_OBJ_GEN(__LISP_MY_INT, &some_int),
+  };
+
+  // ...
+#+end_src
+
+For functions, we have two primitive types:
+
+1. =__LISP_OBJ_CFUN=
+2. =__LISP_OBJ_CFUN_LIT=
+
+Where the first one is a generic function, and the second one is more like a
+macro: it quotes all its elements.
+
+*** Top-level
+
+To start programming in LIBVSL, you'll need to init a /top-level/. Depending on
+the kind of input, you'll have different functions to call:
+
+1. user defined expressions (stdin):
+   =lisp_toplevel_lex(<top-level>)=
+2. programmer defined expressions (string): =lisp_toplevel_str(<top-level>,
+   <string>)=
+3. user/programmer defined expressions (SEXP):
+   =lisp_toplevel_exp(<top-level>, <sexp>)=
+
+Where =<top-level>= is your top-level symbol table. If you have C-defined
+symbols, init them through =clisp_init= (see previous section).
+
+REPL-like behaviour can be achieved via the first function.
+
+*** Implementation example
 
 Here's an implementation that defines a LISP with a single function called
-=(hello-world)= that just prints "hello world".
+=hello-world= that just prints "hello world". If you've configured and compiled
+LIBVSL correctly, you should be able to compile the code below.
 
 Source code (=myvsl.c=):
 
@@ -424,36 +205,38 @@ Source code (=myvsl.c=):
 
   #include <stdio.h>
 
-  CLISP_PRIM_DEFUN(myvsl_hello_world) {
+  CLISP_DEFUN(myvsl_hello_world) {
       printf("hello world");
       return (struct lisp_ret) {0};
   }
 
-  static struct clisp_sym myvsl_prim_funtab[] = {
-      CLISP_PRIM_DECLFUN("hello-world", myvsl_hello_world, /* (hello-world) */
-                         0, 0, 0, 0),
-      CLISP_PRIM_DECLFUN_END(),
+  static CLISP_TAB(myvsl_tab) {
+      // (hello-world)
+      CLISP_DEF("hello-world",
+                CLISP_OBJ(__LISP_TYP_FUN, fun = myvsl_hello_world)),
   };
 
-  static struct clisp_tab iterarray[] = {
-      CLISP_PRIM_DECLTAB(myvsl_prim_funtab, __LISP_TYP_FUN),
+  int main(void) {
+    register int ret = 0;
 
-      CLISP_PRIM_DECLTAB_END(),
-  };
+    MAYBE_INIT(libvsl_init());
 
-  int myvsl_frontend(void) {
-      lisp_prim_setlocal(iterarray, false);
-      return 0;
+    struct lisp_symtab* tab = NULL;
+
+    tab = clisp_init(tab, myvsl_tab, SIZEOF(myvsl_tab));
+    assert(tab, OR_ERR());
+
+    ret = lisp_toplevel_lex(tab);
+
+    done_for(ret);
   }
-
-  LIBVSL_FRONTEND(myvsl_frontend);
 #+end_src
 
 Building:
 
 #+begin_src sh
   $ make libvsl.a
-  $ clang -I. -L. -lvsl myvsl.c -o myvsl
+  $ cc -I. -L. -lvsl myvsl.c -o myvsl
   $ ./myvsl
   (hello-world)
   hello world
@@ -462,52 +245,92 @@ Building:
   $
 #+end_src
 
+** Programming in LIBVSL
+
+*** Reading/Writing memory
+
+For actually programming in LIBVSL, the way you would define something is with
+the =struct lisp_sym* lisp_symtab_set(string_ip sym_str, struct lisp_obj
+sym_obj, struct lisp_symtab* sym_tab)= function. The =sym_str= is a string
+iterator, which can be gotten from the lexer with =lex.symbuf= or from a Cstring
+with the =string_ip to_string_ip(char* string)= function (this doesn't allocate
+new memory). This function returns a pointer to the newly allocated symbol: NULL
+if some error occured.
+
+This function will overwrite any other symbol of the same name, if it already
+exists. If you want to set or get instead, use =lisp_symtab_sets=: it has the
+same signature as =lisp_symtab_set=, but it doesn't overwrite the symbol if it
+already exists.
+
+To get a symbol from the symbol table given its string representation, use
+=struct lisp_sym* lisp_symtab_get(string_ip sym_str, struct lisp_symtab*
+sym_tab)=.
+
+*** Call stack
+
+The call stack of LIBVSL depends on the top-level called. For the lexer, =struct
+lisp_ret lisp_stack_frame_lex(struct lisp_symtab* envp)= is called. For and SEXP
+=struct lisp_ret lisp_stack_frame_sexp(struct lisp_symtab* envp)= is called.
+
+User defined functions (lambdas) call the =lisp_eval= function, which has the
+same type of =lisp_fun= (see =lisp.h=). The stack will call =lisp_eval= with
+=argp[0]= being a pointer to an SEXP which should contain other expressions to
+be evaluated.
+
+Cfunctions are called directly in the stack.
+
+** Memory management
+
+# TODO
+
 ** LIBVSL limitations
 
 By design, any frontend implementation of LIBVSL will have some limitations.
 
-*** Static literal range
+# TODO
 
-The range of elements of a function that are to be automatically literals (i.e.
-lists that won't resolute) is static.
+** LIBVSL LISP concept differences
 
-For example, the function =fun= has LR set to =[3, ∞)=, because:
+*** No CONS
 
-#+begin_quote
-  (fun <sym> <sym-list> <code...>)
-   1    2     3          4   ...
-#+end_quote
+There are some internal differences that LIBVSL has with other LISPs. The most
+glaring of which is the fact we have no =cons= native data structure. That is, a
+list expression is not stored like:
 
-From the third element forward, the expressions are taken literally.
+#+begin_src text
+  (foo bar baz)
+  this: [foo|*]->[bar|*]->[baz|=]
 
-*** Arbitrarily bounded expressions are linked lists
+  (foo (bar baz))
+  or this: [foo|*]->[[bar|*]->[baz|=]|=]
+#+end_src
 
-Normally bounded expressions get the number of allocated elements for the stack
-from the =.size[1]= element of their symbols. For example, =(if expr true
-false?)= has /three/ as the upper bound and /two/ as the lower bound, which
-means the stack will have exactly three elements allocated, even if only two are
-used.
+('*' points to an SEXP, '=' is empty)
 
-However, for expressions like: =(fun (args) body...)= where the number of
-elements is arbitrary, the elements are treated internally as /linked lists/,
-from =argp0= forward. As a programmer, you access them via the =.next= field,
-which will yield a pointer to the next element.
+where SEXPs are treated like CONS cells. Instead, we internally store SEXPs as
+the full expression with binary trees, and when we have more than two elements,
+the rest of the expression is parented by so-called /LEXP/s. The =struct
+lisp_sexp= type of LIBVSL store SEXPs as a left and right node. That means that
+we can ascertain where the expression ends if the right node is a symbol or
+doesn't exist, instead of resulting to 'empty' ends.
 
-*** Symbol resolution is done at the stack level
+To use the example above, they would look like:
 
-Whenever an expression receives a symbol that is **not literal**, it will be
-converted by the /stack/, not the expression's /function/. This is an internal
-design, it won't matter much for the user of the language (frontend users), but
-for those developing LIBVSL's backends.
+#+begin_src text
+  (foo bar baz)
+  this: [foo|>]->[bar|baz]
 
-*** No string/integer literal
+  (foo (bar baz))
+  or this: [foo|[bar|baz]]
+#+end_src
 
-This is a **purely symbolic** LISP. That means the only elements of the language
-you can define are symbols and expressions. As mentioned in the '/README/', this
-was made with the intent of being the stage 0 of bootstrapping of another LISP,
-so it had to be /as small as we can make it/.
+('>' points to an LEXP)
 
-You can still /use/ string/integer literals, but you can't /define/ them in a
-program written with LIBVSL yourself.
+Internally, we cannot evaluate expressions parented by LEXPs, as they serve as a
+sort of "continuation" of its own parent. So instead of =car= and =cdr=, we use
+=head= and =tail=, which are diferent because:
 
-For this reason, no mathematical operation made it into PRIMVSL.
+#+begin_src
+  (car '(foo (bar baz))) -> ((bar baz))
+  (tail '(foo (bar baz))) -> (bar baz)
+#+end_src

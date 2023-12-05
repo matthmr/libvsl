@@ -12,28 +12,13 @@ MAKEFILES:=         \
 	make/Targets.mk   \
 	make/Deps.mk
 
-PRE_SRC:=lisp.c
-PRE_BIN:=lisp
-
-TARGETS += $(PRE_BIN)
-
-$(PRE_BIN): prevsl $(PRE)
-ifndef $(PRE)
-	@echo "[ !! ] Missing \`PRE'. Did you set it in \`./configure'?"
-	@exit 1
-endif
-	@echo "PREVSL " $(PRE)
-	@./prevsl < $(PRE) > $(PRE_SRC) || exit 1
-	@echo "CC lisp"
-	@$(CC) -c $(CFLAGS) $(CFLAGSADD) -o $(PRE_BIN) -L. -lvsl $(PRE_SRC)
-
 clean-obj:
 	@echo "RM " $(OBJECTS)
 	@rm -rfv $(OBJECTS)
 
 clean-targets:
-	@echo "RM " $(TARGETS) $(LIBRARIES) $(PRE_SRC)
-	@rm -rfv $(TARGETS) $(LIBRARIES) $(PRE_SRC)
+	@echo "RM " $(TARGETS) $(LIBRARIES)
+	@rm -rfv $(TARGETS) $(LIBRARIES)
 
 clean-make:
 	@echo "RM " $(MAKEFILES)
@@ -53,8 +38,6 @@ tags:
 help:
 	@echo -e "\
 make: makes the current dependency of \`all' (libvsl.a)\n\
-make lisp PRE=<vsl-file> makes the lisp, with \`PRE' as the pvsl file.\n\
-                         \`PRE' can also be defined at \`./configure' time\n\
 make clean-obj: cleans objects files\n\
 make clean-tags: cleans tags\n\
 make clean-targets: cleans targets\n\
@@ -62,4 +45,4 @@ make clean-make: cleans makefiles\n\
 make clean: cleans all"
 
 .PHONY: clean clean-tags clean-obj clean-targets clean-make \
-        tags help lisp $(PRE)
+        tags help lisp
