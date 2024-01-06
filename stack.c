@@ -1,6 +1,7 @@
 #include "debug.h"
 
 #include "lex.h"
+#include "lisp.h"
 #include "sexp.h"
 #include "stack.h"
 #include "mm.h"
@@ -21,179 +22,148 @@ EMSG {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static inline struct lisp_ret
-lisp_emptyisnil(struct lisp_sexp* _argp, uint argv, struct lisp_symtab* envp) {
-  return (struct lisp_ret) {
-    .master = (struct lisp_obj) {
-      .typ = __LISP_OBJ_NIL,
-    },
-    .slave = __LISP_OK,
-  };
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-struct lisp_ret
-lisp_eval(struct lisp_sexp* argp, uint argv, struct lisp_symtab* envp) {
-  register int       ret = 0;
-  struct lisp_ret  ret_t = {0};
-  struct lisp_arg_t args = {0};
-  struct lisp_obj  argp0 = {0};
-
-  // argp0: points to an SEXP which contains all other SEXPs part of the lambda
-  // we pass this to the stack after setting up the environment
-  FOR_ARG(arg, args) {
-    argp0 = *arg;
-    break;
-  }
-
-  done_for((ret_t.slave = ret, ret_t));
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-/** Handle events yielded by the SEXP tree transversal */
-static inline enum lisp_stack_stat
-lisp_stack_handle_ev(struct lisp_yield st_stat) {
-  switch (st_stat.stat) {
-  case __YIELD_LEFT_OBJ:
-  case __YIELD_RIGHT_OBJ:
-    return __STACK_ELEM;
-  case __YIELD_LEFT_EXPR:
-  case __YIELD_RIGHT_EXPR:
-    return __STACK_NEW;
-  case __YIELD_END_EXPR:
-    return __STACK_DONE;
-  default:
-    return __STACK_OK;
-  }
-}
-
-// NOTE: We apply a 'copy-on-write' policy with the argument data; we only
-// allocate memory for the argument if we need to change its memory, otherwise
-// it's kept the same.
-
-/** Handle the pop event. The expression @exp is the one we popped *from*, and
-    @ret is *what* we popped */
-static inline void
-lisp_stack_pop(struct lisp_stack* frame, struct lisp_obj ret,
-               struct lisp_sexp* exp) {
-  struct lisp_sexp* exp_into = exp->root;
-  bool from_left = (exp_into->left._.exp == exp);
-
-  frame->argv++;
-
-  if (from_left) {
-    exp_into->left  = ret;
-  }
-  else {
-    exp_into->right = ret;
-  }
-}
-
-/** Resolute @obj as an argument of the stack frame */
-static inline void
-lisp_stack_res(struct lisp_stack* frame, struct lisp_obj obj) {
-  register struct lisp_sexp* argp = frame->argp;
-
-  if (IS_NIL(argp->right.typ)) {
-    argp->left  = obj;
-  }
-  else {
-    argp->right = obj;
-  }
-
+/** Unbind symbols from the symbol table, unless GC guarded */
+static void lisp_stack_unbind(struct lisp_symtab* tab) {
+  // TODO
   return;
 }
+
+/** Frees the stack memory whose GC guard is not set */
+static void lisp_stack_free(struct lisp_sexp* argp) {
+  struct lisp_yield yield = {
+    .exp  = argp,
+    .stat = __YIELD_OK,
+  };
+
+  struct lisp_obj* obj = NULL;
+
+  // it's safe to free SEXP nodes even though we're technically accessing them
+  // after free, because we're not allocating anything below this function
+  while (yield = lisp_sexp_yield(yield, __YIELD_IGNORE_LEXP),
+         yield.stat != __YIELD_DONE) {
+    switch (yield.stat) {
+    case __YIELD_LEFT_EXPR:
+    case __YIELD_LEFT_OBJ:
+      obj = yield.exp->left;
+
+      if (yield.stat == __YIELD_LEFT_EXPR) {
+        yield.stat = __YIELD_END_EXPR;
+      }
+
+      break;
+
+    case __YIELD_RIGHT_EXPR:
+    case __YIELD_RIGHT_OBJ:
+      obj = yield.exp->right;
+
+      if (yield.stat == __YIELD_RIGHT_EXPR) {
+        yield.stat = __YIELD_END_EXPR;
+      }
+
+      break;
+
+    case __YIELD_END_EXPR:
+      if (yield.exp != argp) {
+        mm_free(yield.exp);
+      }
+      break;
+
+    default:
+      break;
+    }
+
+    lisp_free_obj(obj);
+    obj = NULL;
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
 
 #if 0
-/** Handle the symbol/literal event. @st_stat has as the .exp field the
-    parent expression for the argument */
-static inline void
-lisp_stack_arg(struct lisp_stack* frame, bool lit, struct lisp_trans st_stat) {
-  struct lisp_sexp* exp = st_stat.exp;
+struct lisp_ret
+lisp_stack_frame_sexp(struct lisp_sexp* exp, struct lisp_symtab* envp) {
+  register int ret = 0;
+  struct lisp_ret f_ret = {0};
 
-  frame->argv++;
+  struct lisp_yield yield = {
+    .exp  = argp,
+    .stat = __YIELD_OK,
+  };
 
-  if (lit) {
-    return;
-  }
+  struct lisp_stack f_stack = {0};
 
-  // DEBUG
-  return;
+  struct lisp_sym* f_sym = NULL;
+  struct lisp_obj f_obj = {0}, * p_obj = NULL;
 
-  if (LEFT_HASH(*exp)) {
-    exp->left._.sym  = *lisp_symtab_get(exp->left._.hash);
-  }
-  else {
-    exp->right._.sym = *lisp_symtab_get(exp->right._.hash);
-  }
+  struct lisp_symtab f_symtab = {0};
+  struct lisp_sexp      argp0 = {0};
+
+  struct lisp_sexp* f_top = &argp0;
+
+  lex.ev &= ~__LEX_EV_PAREN_IN;
+
+  // we don't need to allocate a new scope right away
+  f_stack.envp = f_envp;
+  f_stack.inherit = true;
+
+  //// FRAME
+
+  DB_MSG("[ stack ] new frame");
+
+  f_stack.argp = &argp0;
+  f_top = f_stack.argp;
+
+  DB_MSG("[ stack ] yielding for: argp[0]");
+
+
+  //// YIELD ARGP0
+
+  yield = lisp_sexp_yield(yield, 0);
+
+  switch (yield.stat) {
+    case __YIELD_LEFT_EXPR:
+      break;
+
+    case __YIELD_LEFT_OBJ:
+      break;
+
+    case __YIELD_END_EXPR:
+      defer();
+      break;
+
+    default:
+      break;
+    }
+
+  done_for(f_ret);
 }
 #endif
 
-/** Frees the stack memory not tagged as `keep' */
-// TODO: this
-static void lisp_stack_free(struct lisp_stack* frame) {
-  // DEBUG
-  // register int        ret = __STACK_DONE;
-  // struct lisp_trans s_ret = {0};
-
-  // s_ret.stat = __TRANS_OK;
-  // s_ret.exp  = frame->argp;
-
-  // while (s_ret = lisp_sexp_yield_for_clear(s_ret),
-  //        ret = lisp_stack_handle_ev(s_ret),
-  //        ret != __STACK_DONE) {
-  //   if ()
-  // }
-
-  lisp_sexp_clear(frame->argp);
-
-  return;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
+/* TODO: handle NULL obj as `nil' */ //
 struct lisp_ret lisp_stack_frame_lex(struct lisp_symtab* f_envp) {
-  register int      ret = __STACK_DONE;
+  register int ret = 0;
   struct lisp_ret f_ret = {0};
 
   struct lisp_stack f_stack = {0};
 
   struct lisp_sym* f_sym = NULL;
-  struct lisp_symtab f_symtab = {0}; // for literal symbols
-  struct lisp_obj f_obj = {0};
+  struct lisp_obj f_obj = {0}, * p_obj = NULL;
 
-  struct lisp_sexp argp0 = {
-    .root      = NULL,
-    .typ       = __LISP_OBJ_SEXP,
-    .left.typ  = __LISP_OBJ_NIL,
-    .right.typ = __LISP_OBJ_NIL,
-  };
+  // for literal symbols. in the stack frame, literal symbols are treated as
+  // symbols in symtab whose objects are themselves. if they pop, they become
+  // a standard object. orphan symbols will always be freed
+  struct lisp_symtab* f_symtab = NULL;
+  struct lisp_sexp argp0 = {0};
 
   struct lisp_sexp* f_top = &argp0;
 
-  bool   lit = false;
-  bool scope = f_envp && true;
+  bool ref = false;
 
   lex.ev &= ~__LEX_EV_PAREN_IN;
 
-  // we implement a copy-on-write policy for the symbol table when creating new
-  // scopes
-  if (!scope) {
-    f_envp = mm_alloc(sizeof(*f_envp));
-    assert(f_envp, OR_ERR());
-
-    f_envp->root = NULL;
-    f_envp->tab = (struct lisp_symtab_node) {
-      .hash_idx = 0,
-      .self     = {0},
-      .left     = NULL,
-      .right    = NULL,
-    };
-  }
-
+  // we don't need to allocate a new scope right away
   f_stack.envp = f_envp;
+  f_stack.inherit = true;
 
   //// FRAME
 
@@ -215,68 +185,109 @@ struct lisp_ret lisp_stack_frame_lex(struct lisp_symtab* f_envp) {
   if (LEX_SYMBOL_OUT(lex.ev)) {
     lex.ev &= ~__LEX_EV_SYMBOL_OUT;
   }
-  // TODO: anonymous return should be cleared by us, given the chance
   else if (LEX_PAREN_IN(lex.ev)) {
     lex.ev &= ~__LEX_EV_PAREN_IN;
     f_ret   = lisp_stack_frame_lex(f_stack.envp);
 
-    assert(f_ret.slave == __STACK_DONE, OR_ERR());
-    // assert(IS_FUN(f_ret.master.typ), err(EISNOTFUN));
+    assert(f_ret.succ, OR_ERR());
+    assert(f_ret.obj && IS_FUN(f_ret.obj->typ), err(EISNOTFUN));
 
-    // f_hash = f_ret.master._.sym;
+    p_obj = f_ret.obj;
+    ref   = f_ret.ref;
+
+    goto save_argp0;
   }
   else if (LEX_PAREN_OUT(lex.ev)) {
     lex.ev &= ~__LEX_EV_PAREN_OUT;
 
-    f_ret = lisp_emptyisnil(f_stack.argp, f_stack.argv, f_stack.envp);
+    f_ret.succ = true;
 
-    goto free;
+    f_ret.ref = true; // false;
+    f_ret.obj = NULL; // pure `nil' is a NULL object pointer
+
+    defer();
   }
 
-  f_sym = lisp_symtab_get(lex.symbuf, f_stack.envp);
+  f_sym = lisp_symtab_get(lex.symbuf, f_stack.envp, 0);
 
   assert(f_sym, OR_ERR());
-  assert(IS_FUN(f_sym->_.dat.obj.typ), err(EISNOTFUN));
+  assert(f_sym->obj && IS_FUN(f_sym->obj->typ), err(EISNOTFUN));
+
+  p_obj = f_sym->obj;
+  ref   = true; // false;
 
   INC_RESET(lex.symbuf);
 
-  f_obj.typ   = __LISP_OBJ_SYM;
-  f_obj._.sym = memcpy(f_obj._.sym, f_sym, sizeof(*f_sym));
+save_argp0:
+  f_stack.argp = lisp_sexp_obj(p_obj, ref, f_stack.argp);
+  assert(f_stack.argp, OR_ERR());
 
-  f_stack.argp = lisp_sexp_obj(f_obj, f_stack.argp);
-
-  lit = IS_LIT(f_sym->_.dat.obj.typ) && true;
+  f_stack.lit = IS_LIT(f_sym->obj->typ);
 
   f_stack.argv++;
 
   //// FROM ARGP0
 
   for (;;) {
+    DB_FMT("[ stack ] yielding for: argp[%d]", f_stack.argv);
+
     do {
       ret = lisp_lex_yield();
     } while (ret == __LEX_NO_INPUT);
 
     assert(ret == __LEX_OK, OR_ERR());
 
-    DB_FMT("[ stack ] yielding for: argp[%d]", f_stack.argv);
-
     if (LEX_SYMBOL_OUT(lex.ev)) {
       lex.ev &= ~__LEX_EV_SYMBOL_OUT;
       f_stack.argv++;
 
-      f_sym = lit?
-        lisp_symtab_sets(lex.symbuf,
-                         (f_obj.typ = __LISP_OBJ_NIL, f_obj), &f_symtab):
-        lisp_symtab_get(lex.symbuf, f_stack.envp);
+      if (f_stack.lit) {
+        if (!f_symtab) {
+          f_symtab = mm_alloc(sizeof(*f_symtab));
+          assert(f_symtab, OR_ERR());
+        }
+
+        f_sym = lisp_symtab_set(lex.symbuf, NULL, f_symtab, __LISP_SYMTAB_SAFE);
+      }
+      else {
+        f_sym = lisp_symtab_get(lex.symbuf, f_stack.envp, 0);
+      }
 
       assert(f_sym, OR_ERR());
 
-      f_stack.argp = lisp_sexp_obj(
-        (lit? (struct lisp_obj) {
-            ._.sym = f_sym,
-            .typ   = __LISP_OBJ_SYM,
-          }: f_sym->_.dat.obj), f_stack.argp);
+      // we create an object wrapper for symbol literals
+      if (f_stack.lit) {
+        if (!f_sym->obj) {
+          p_obj = mm_alloc(sizeof(*p_obj));
+          assert(p_obj, OR_ERR());
 
+          f_obj = (struct lisp_obj) {
+            .typ   = __LISP_OBJ_SYM,
+            .m_typ = __LISP_OBJ_ORG,
+            ._.sym = *f_sym,
+            .refs  = 0,
+
+            .cow.org.recip = 0,
+          };
+
+          // the object of the symbol literal is an object owning the symbol
+          p_obj = memcpy(p_obj, &f_obj, sizeof(f_obj));
+
+          f_sym->obj = p_obj;
+        }
+
+        ref = true;
+      }
+
+      // by default, symbols are passed by value. internally, this does not
+      // allocate new memory unless the bound symbol is mutated, then it
+      // copies the value before proceeding. pass by reference is possible with
+      // anonymous return (see below)
+      else {
+        ref = false;
+      }
+
+      f_stack.argp = lisp_sexp_obj(f_sym->obj, ref, f_stack.argp);
       assert(f_stack.argp, OR_ERR());
 
       INC_RESET(lex.symbuf);
@@ -286,34 +297,37 @@ struct lisp_ret lisp_stack_frame_lex(struct lisp_symtab* f_envp) {
       lex.ev &= ~__LEX_EV_PAREN_IN;
       f_stack.argv++;
 
-      if (lit) {
-        f_obj.typ   = __LISP_OBJ_SEXP;
-        f_obj._.exp = mm_alloc(sizeof(*f_obj._.exp));
+      if (f_stack.lit) {
+        p_obj = mm_alloc(sizeof(*p_obj));
+        assert(p_obj, OR_ERR());
+
+        f_obj = (struct lisp_obj) {
+          .typ   = __LISP_OBJ_EXP,
+          .m_typ = __LISP_OBJ_ORG,
+          ._.exp = mm_alloc(sizeof(struct lisp_sexp)),
+          .refs  = 0,
+
+          .cow.org.recip = 0,
+        };
         assert(f_obj._.exp, OR_ERR());
 
-        *f_obj._.exp = (struct lisp_sexp) {
-          .root      = f_stack.argp,
-          .typ       = __LISP_OBJ_SEXP,
-          .left.typ  = __LISP_OBJ_NIL,
-          .right.typ = __LISP_OBJ_NIL,
-        };
-
-        f_stack.argp = lisp_sexp_obj(f_obj, f_stack.argp);
-        assert(f_stack.argp, OR_ERR());
-
-        f_stack.argp = RIGHT_NIL(*f_stack.argp)?
-          f_stack.argp->left._.exp: f_stack.argp->right._.exp;
+        p_obj = memcpy(p_obj, &f_obj, sizeof(f_obj));
+        ref   = true;
       }
       else {
         f_ret = lisp_stack_frame_lex(f_stack.envp);
+        assert(f_ret.succ, OR_ERR());
 
-        assert(f_ret.slave == __STACK_DONE, OR_ERR());
-        lisp_stack_res(&f_stack, f_ret.master);
+        p_obj = f_ret.obj;
+        ref   = f_ret.ref;
       }
+
+      f_stack.argp = lisp_sexp_obj(p_obj, ref, f_stack.argp);
+      assert(f_stack.argp, OR_ERR());
     }
 
     else if (LEX_PAREN_OUT(lex.ev)) {
-      lex.ev      &= ~__LEX_EV_PAREN_OUT;
+      lex.ev &= ~__LEX_EV_PAREN_OUT;
       f_stack.argp = lisp_sexp_end(f_stack.argp);
 
       if (f_stack.argp == f_top) {
@@ -323,15 +337,16 @@ struct lisp_ret lisp_stack_frame_lex(struct lisp_symtab* f_envp) {
   }
 
 apply:
-  f_obj = f_stack.argp[0].left;
+  DB_MSG("[ stack ] evaluating...");
+
+  p_obj = argp0.left;
 
   // user defined functions are wrapped around `lisp_eval'. CLISP functions
   // are executed directly
-  switch (f_obj.typ) {
+  switch (p_obj->typ) {
   case __LISP_OBJ_CFUN:
   case __LISP_OBJ_CFUN_LIT:
-    f_ret = CFUN(f_obj._.sym->_.dat.obj)
-      (f_stack.argp, f_stack.argv, f_stack.envp);
+    f_ret = CFUN_OF(*p_obj) (f_stack.argp, f_stack.argv, f_stack.envp);
     break;
 
   case __LISP_OBJ_LAMBDA:
@@ -339,16 +354,18 @@ apply:
     f_ret = lisp_eval(f_stack.argp, f_stack.argv, f_stack.envp);
     break;
 
-  // this never happens, but the compiler doesn't know that
+  // apease the almighty compiler
   default:
     break;
   }
 
-  assert((int) f_ret.slave == __LISP_OK, OR_ERR());
+  // wtf
+  ret = (int)f_ret.succ;
+  assert(ret == 1, OR_ERR());
+  ret = 0;
 
-free:
-  lisp_stack_free(&f_stack);
-  defer_as(__STACK_DONE);
+  lisp_stack_free(f_stack.argp);
+  lisp_stack_unbind(f_symtab);
 
-  done_for_with(f_ret, f_ret.slave = ret);
+  done_for_with(f_ret, f_ret.succ = (ret == 0));
 }

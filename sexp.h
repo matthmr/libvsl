@@ -23,15 +23,15 @@ enum lisp_yield_t {
 };
 
 /** SEXP tree yield suppressors */
-enum lisp_yield_ignore_t {
+enum lisp_yield_ignore {
   __YIELD_LIT = 0,
 
-  __YIELD_IGNORE_OBJ     = BIT(0),
+  __YIELD_IGNORE_NONEND  = BIT(0),
   __YIELD_IGNORE_LEXP    = BIT(1),
   __YIELD_IGNORE_REBOUND = BIT(2),
 };
 
-#  define IGNORE_OBJ(x) ((x) & __YIELD_IGNORE_OBJ)
+#  define IGNORE_NONEND(x) ((x) & __YIELD_IGNORE_NONEND)
 #  define IGNORE_LEXP(x) ((x) & __YIELD_IGNORE_LEXP)
 #  define IGNORE_REBOUND(x) ((x) & __YIELD_IGNORE_REBOUND)
 
@@ -46,13 +46,10 @@ struct lisp_yield {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-/** Yield expressions from the SEXP tree */
-struct lisp_yield lisp_sexp_yield_exp(struct lisp_yield trans);
-
 /** Adds @obj to the ends of the expression rooted by @expr_head, returning the
     new sub-expression */
 struct lisp_sexp*
-lisp_sexp_obj(struct lisp_obj obj, struct lisp_sexp* expr_head);
+lisp_sexp_obj(struct lisp_obj* obj, bool ref, struct lisp_sexp* expr_head);
 
 /** Applies the 'end' algorithm to @expr_head
 
@@ -67,16 +64,14 @@ lisp_sexp_obj(struct lisp_obj obj, struct lisp_sexp* expr_head);
     always checking NULL against a copy of the expression head */
 struct lisp_sexp* lisp_sexp_end(struct lisp_sexp* expr_head);
 
-// DEBUG
-#if 0
+#if 0 // DEBUG
 /** Copies the SEXP tree rooted by @expr_head. Returns a pointer to the root of
     the new tree */
 struct lisp_sexp* lisp_sexp_copy(struct lisp_sexp* expr_head);
 #endif
 
-/** Clears the SEXP tree rooted by @expr_head. @expr_head is not returned back,
-    so the caller has to be aware that the memory it had before is probably
-    garbage now */
-void lisp_sexp_clear(struct lisp_sexp* expr_head);
+/** Yield expressions from the SEXP tree, ignoring certain conditions */
+struct lisp_yield
+lisp_sexp_yield(struct lisp_yield yield, const enum lisp_yield_ignore ignore);
 
 #endif

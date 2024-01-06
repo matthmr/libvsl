@@ -79,8 +79,6 @@ static inline enum lisp_lex_stat lisp_lex_c(char c) {
   lex.symbuf.str[lex.symbuf.idx] = c;
   lex.symbuf.idx++;
 
-  DB_FMT("[ lex ] symbol char (%c)", c);
-
   done_for(ret);
 }
 
@@ -119,7 +117,9 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, uint cb_idx) {
   lex.iobuf.idx = (cb_idx + 1);
 
   if (LEX_SYMBOL_OUT(lev)) {
-    DB_MSG("[ lex ] emit: sym");
+    DB_BYT("[ lex ] emit: sym (");
+    DB_NBYT(lex.symbuf.str, lex.symbuf.idx);
+    DB_MSG(")");
 
     // we preemptively shift the cursor up, but if we're tangled, shifting it
     // back down will make it trigger the next time we try to yield
@@ -149,7 +149,7 @@ lisp_lex_handle_ev(enum lisp_lex_ev lev, uint cb_idx) {
 
     --lex.paren;
 
-    DB_FMT("  -> lex: --paren: %d", lex.paren);
+    DB_FMT("  -> lex: paren--: %d", lex.paren);
   }
 
   done_for(ret);

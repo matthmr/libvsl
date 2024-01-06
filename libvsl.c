@@ -28,9 +28,25 @@ int lisp_toplevel_lex(struct lisp_symtab* envp) {
     // push function `('
     else if (LEX_PAREN_IN(lex.ev)) {
       sret = lisp_stack_frame_lex(envp);
-      assert(sret.slave == __STACK_OK, OR_ERR());
+      assert(sret.succ, OR_ERR());
+
+      // TODO: GC
     }
   }
+
+  done_for(ret);
+}
+
+// TODO: 2 below
+
+int lisp_toplevel_sexp(struct lisp_sexp* expr, struct lisp_symtab* envp) {
+  register int ret = 0;
+
+  done_for(ret);
+}
+
+int lisp_toplevel_str(char* str, struct lisp_symtab* envp) {
+  register int ret = 0;
 
   done_for(ret);
 }

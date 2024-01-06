@@ -73,4 +73,9 @@ void* mm_alloc(const uint m_size);
 /** Deallocates the memory of @m_mem */
 void mm_free(void* m_mem);
 
+///
+
+/** Duplicate @n bytes of @m_src */
+void* mm_ndup(void* m_src, uint n);
+
 #endif

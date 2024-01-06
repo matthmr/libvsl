@@ -1,6 +1,9 @@
-#include "debug.h"
+// TODO: OOM should be panic, not error
 
+#include "debug.h"
 #include "mm.h"
+
+#include <string.h>
 
 //// ERRORS
 
@@ -346,6 +349,18 @@ void mm_free(void* m_mem) {
   }
 
   m_if.m_header = c_header;
+}
+
+void* mm_ndup(void* m_src, uint n) {
+  register int ret = 0;
+  void*      ret_t = NULL;
+
+  ret_t = mm_alloc(n);
+  assert(ret_t, OR_ERR());
+
+  memcpy(ret_t, m_src, n);
+
+  done_for((ret_t = ret? NULL: ret_t));
 }
 
 // TODO: maybe we could host a low-memory structure for easy references to

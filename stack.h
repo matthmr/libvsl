@@ -16,10 +16,17 @@ struct lisp_stack {
   /* argument amount, counting the function name */
   uint argv;
 
-  /* parent scope COWd with the current scope */
+  /* current lexical scope */
   struct lisp_symtab* envp;
+
+  /* did we just inherited the parent? */
+  bool inherit;
+
+  /* is this function literal? i.e. does it defer expression resolution? */
+  bool lit;
 };
 
+#if 0
 /** Base stack stat */
 enum lisp_stack_stat {
   __STACK_ERR  = -1,
@@ -29,16 +36,13 @@ enum lisp_stack_stat {
   __STACK_NEW,  // as in: push a new frame
   __STACK_DONE, // as in: popped the current frame
 };
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 
-/** Evals an SEXP tree as a function */
-struct lisp_ret lisp_eval
-(struct lisp_sexp* argp, uint argv, struct lisp_symtab* envp);
-
-/** Create a new stack frame. Will yield from the SEXP @expr */
-// struct lisp_ret
-// lisp_stack_frame_sexp(struct lisp_sexp* expr, struct lisp_symtab* envp);
+/** Create a new stack frame. Will yield from the SEXP @exp */
+struct lisp_ret
+lisp_stack_frame_sexp(struct lisp_sexp* exp, struct lisp_symtab* envp);
 
 /** Create a new stack frame. Will yield from the lexer until a `pop' event is
     sent */

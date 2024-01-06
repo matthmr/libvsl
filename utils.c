@@ -39,7 +39,7 @@ string_ip to_string_ip(char* str) {
 ////////////////////////////////////////////////////////////////////////////////
 
 static const string_s err_wtf =
-  ERR_STRING("libvsl", "internal error to LIBVSL: did not issue error");
+  ERR_STRING("libvsl", "internal error to LIBVSL");
 
 int eerr(const string_s* emsg, int ecode) {
   static bool did_msg = false;
